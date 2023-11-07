@@ -5,7 +5,20 @@ library(myPackage)
 library(reshape)
 library(timeSeries)
 go_to("functions")
+# source("quantilefit_function_DDM.R")
 source("rw_createHM_driftsign.r")
+
+font <- "Times new roman"
+windowsFonts(A = windowsFont(font))
+
+#' Function to get the right font size in points
+cex_size <- function(size,cex.layout) {
+  return(size/(par()$ps*cex.layout))
+}
+cex.layout <- 1
+cexlab <- cex_size(10,cex.layout)*cex.layout
+cexax <- cex_size(8,cex.layout)
+cex.leg <- cex_size(8,cex.layout)
 
 # We consider uniformly distributed drift rates for the reference heatmap
 Ndrift <- 1000
@@ -36,21 +49,24 @@ hmvec_low <- as.vector(hm_low); hmvec_up <- as.vector(hm_up)
 colMap <- viridis::viridis(length(hm_up))
 go_to("plots")
 # Plot reference HM
-jpeg(filename = "pcor_hm_axis.jpeg",
-     width = 12,
-     height = 6,
-     units = "cm",
-     res = 500)
 par(mar=c(3,4,1.5,2))
+jpeg(filename = "pcor_hm_axis.jpeg",
+     width = 8,
+     height = 4,
+     units = "cm",
+     res = 1200)
+par(mar=c(2,2.7,1,1.55))
+par(family="A")
 fields::image.plot(1:dim(hm_up)[1],1:dim(hm_up)[2],hm_up,zlim=c(0,1),
                    col=colMap,ylab="",xlab='',legend.shrink=.5,
-                   main=paste(""),
-                   axes=F,cex.main=cexmain,
+                   main=paste(""),legend.cex=cex.leg,
+                   axes=F,cex.main=cexmain,legend.mar=2.5,
+                   legend.args = list(text=expression(paste(italic("P"),"(correct)")),cex=cexlab,side = 3,line=.25),
                    axis.args=list(at=seq(0,1,.5),labels=seq(0,1,.5),cex.axis=cexax))
-mtext("Evidence",2,at=dim(hm_up)[2]/2,line=2,cex=1);
-mtext("Time (s)",1,at=dim(hm_up)[1]/2,line=2,cex=1)
-axis(1, at = c(1,dim(hm_up)[1]), labels = c(0,5))
-axis(2, at = c(1,dim(hm_up)[2]/2,dim(hm_up)[2]), labels = c(-ev_bound,0,ev_bound))
+mtext("Evidence",2,at=dim(hm_up)[2]/2,line=2,cex=cexlab);
+mtext("Time (s)",1,at=dim(hm_up)[1]/2,line=1,cex=cexlab)
+axis(1, at = c(1,dim(hm_up)[1]), labels = c(0,5),cex.axis=cexax)
+axis(2, at = c(1,dim(hm_up)[2]/2,dim(hm_up)[2]), labels = c(-ev_bound,0,ev_bound),cex.axis=cexax)
 dev.off()
 par(mar=c(5,4,4,2)+.1)
 
@@ -121,26 +137,32 @@ for(e in ev_mapping){
 
 
 jpeg(filename = "pcor_ab_axis.jpeg",
-     width = 12,
-     height = 6,
+     width = 8,
+     height = 4,
      units = "cm",
-     res = 500)
-par(mar=c(3,4,1.5,2))
+     res = 1200)
+par(mar=c(2,2.7,1,1.55))
+par(family="A")
 fields::image.plot(1:dim(hm_ldc_up)[1],1:dim(hm_ldc_up)[2],hm_ldc_up,zlim=c(0,1),
                    col=colMap,ylab="",xlab='',legend.shrink=.5,
                    main=expression(paste(alpha," = 15.6; ",beta," = ",0)),
-                   axes=F,cex.main=1,
+                   axes=F,cex.main=1,legend.cex=cex.leg,legend.mar = 2.5,
+                   legend.args = list(text="Confidence",side=3,line=.25,cex=cexlab),
                    axis.args=list(at=seq(0,1,.5),labels=seq(0,1,.5),cex.axis=cexax))
-mtext("Evidence",2,at=dim(hm_ldc_up)[2]/2,line=2,cex=1);
-mtext("Time (s)",1,at=dim(hm_ldc_up)[1]/2,line=2,cex=1)
-axis(1, at = c(1,dim(hm_ldc_up)[1]), labels = c(0,5))
-axis(2, at = c(1,dim(hm_ldc_up)[2]/2,dim(hm_ldc_up)[2]), labels = c(-ev_bound,0,ev_bound))
+mtext("Evidence",2,at=dim(hm_ldc_up)[2]/2,line=2,cex=cexlab);
+mtext("Time (s)",1,at=dim(hm_ldc_up)[1]/2,line=1,cex=cexlab)
+axis(1, at = c(1,dim(hm_ldc_up)[1]), labels = c(0,5),cex.axis=cexax)
+axis(2, at = c(1,dim(hm_ldc_up)[2]/2,dim(hm_ldc_up)[2]), labels = c(-ev_bound,0,ev_bound),cex.axis=cexax)
 dev.off()
 
 # Plot functions and parameters -------------------------------------------
 
+cex.layout <- .83
 lwdgr <- 2
-cexax <- 1.25;cexlab <- 1.25;cexleg <- 1.25;lwdline <- 2
+cexax <- cex_size(8,cex.layout)
+cexlab <- cex_size(10,cex.layout)*cex.layout
+cexleg <- cex_size(8,cex.layout)
+lwdline <- 2
 error.bar <- function(x, y, upper, lower=upper, length=0.1,...){
   if(length(x) != length(y) | length(y) !=length(lower) | length(lower) != length(upper))
     stop("vectors must be same length")
@@ -156,13 +178,14 @@ Ndiff <- length(v)
 simdat$cj_bin <- as.numeric(cut(simdat$cj,breaks = seq(0,1,1/Nbin),labels=1:Nbin))/Nbin
 Simuls1 <- simdat
 Simuls1$cj_bin <- as.numeric(cut(Simuls1$cj_model,breaks = seq(0,1,1/Nbin),labels=1:Nbin))/Nbin
-
-jpeg(filename = "signatures.jpeg",
-     width = 30,
-     height = 10,
+go_to("plots")
+jpeg(filename = "signatures_4.jpeg",
+     width = 16,
+     height = 16,
      units = "cm",
-     res = 500)
-par(mfrow=c(1,3))
+     res = 1200)
+par(family="A")
+par(mfrow=c(2,2), mar = c(5,4,0,2))
 ## Signature 1 ====
 #Aggregate conf for data
 CJcor <- with(simdat,aggregate(cor,by=list(sub,cj_bin),mean));names(CJcor) <- c('sub','cj_bin','cor')
@@ -253,12 +276,48 @@ polygon(c(0:(n-1),(n-1):0),c(colMeans(x_sim,na.rm=T) + (colSds(as.matrix(x_sim),
 lines(0:(n-1),colMeans(xErr_sim,na.rm=T),type='l',lty=1,lwd=lwdgr,col=rgb(252,141,98,128,maxColorValue = 255))
 polygon(c(0:(n-1),(n-1):0),c(colMeans(xErr_sim,na.rm=T) + (colSds(as.matrix(xErr_sim),na.rm=T)/sqrt(N)),(colMeans(xErr_sim,na.rm=T) - colSds(as.matrix(xErr_sim),na.rm=T)/sqrt(N))[Ndiff:1]),
         border=F,col = rgb(252,141,98,51,maxColorValue = 255))
-legend(4,.6,legend=c("High confidence","Low confidence"),lty = c(1,1),bty = "n", cex = cexleg,
+legend("bottomright",legend=c("High confidence","Low confidence"),lty = c(1,1),bty = "n", cex = cexleg,
        col = c(rgb(102,194,165,maxColorValue = 255),rgb(252,141,98,maxColorValue = 255)))
 error.bar(0:(n-1),means,colSds(as.matrix(x),na.rm=T)/sqrt(N),lwd=lwdgr,length=.05,col = rgb(102,194,165,maxColorValue = 255))
 means <- sapply(xErr, mean,na.rm=T)
 error.bar(0:(n-1),means,colSds(as.matrix(xErr),na.rm=T)/sqrt(N),lwd=lwdgr,length=.05, col = rgb(252,141,98,maxColorValue = 255))
 
+
+# Time ~ CJ ---------------------------------------------------------------
+simdat$rt_bin <- cut(simdat$rt,breaks=seq(0,5,.5))
+test <- with(simdat,aggregate(cj,by=list(sub,rt_bin),mean))
+names(test) <- c("sub","rt_bin","cj")
+test <- cast(test,sub~rt_bin)
+test <- test[,2:length(test)]
+
+test_sim <- with(simdat,aggregate(cj_model,by=list(sub,rt_bin),mean))
+names(test_sim) <- c("sub","rt_bin","cj")
+test_sim <- cast(test_sim,sub~rt_bin)
+test_sim <- test_sim[,2:length(test_sim)]
+
+n <- length(test)
+
+na_count <-sapply(test, function(y) sum(length(which(!is.na(y)))))
+
+cex.datdot <- 1
+stripchart(test,vertical = TRUE, col="white",frame=F,xaxt='n',
+           ylim=c(.6,.8), xlim=c(-.05,n-1),
+           yaxt = 'n',xlab="",ylab = "",
+           main = NULL)
+mtext("Confidence",2,at=.7,line=2.5,cex=cexlab);
+mtext("RT bin",1,at=n/2,line=2.5,cex=cexlab);
+axis(1,at=0:(n-1),labels=names(test), cex.axis=cexax);
+axis(2, seq(.6,.8,.05), cex.axis=cexax)
+means <- sapply(test, mean, na.rm = T)
+lines(0:(n-1),means,type='b',pch=16,cex=cex.datdot,lwd=lwdline)
+error.bar(0:(n-1),means,colSds(as.matrix(test),na.rm=T)/sqrt(na_count),lwd=lwdline)
+polygon(c(0:(n-1),(n-1):0),
+        c(colMeans(test_sim,na.rm=T) + (colSds(as.matrix(test_sim),na.rm=T)/sqrt(na_count)),
+          (colMeans(test_sim,na.rm=T) - colSds(as.matrix(test_sim),na.rm=T)/sqrt(na_count))[n:1]),
+        border=F,col = rgb(0,0,0,.5))
+
+
 dev.off()
 
-par(mfrow=c(1,1))
+
+par(mfrow=c(1,1), mar = c(5,4,4,2)+.1)

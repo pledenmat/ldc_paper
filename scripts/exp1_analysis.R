@@ -10,7 +10,6 @@ library(MALDIquant)
 library(reshape)
 library(OneR)
 library(scales)
-library(lattice) # qqmath 
 library(lmerTest)
 library(fields) 
 library(prob)
@@ -18,18 +17,72 @@ library(car)
 library(multcomp)
 setwd(curdir)
 
+stat_test <- F
+
 error.bar <- function(x, y, upper, lower=upper, length=0.1,...){
   if(length(x) != length(y) | length(y) !=length(lower) | length(lower) != length(upper))
     stop("vectors must be same length")
   arrows(x,y+upper, x, y-lower, angle=90, code=3, length=length, ...)
 }
 
-# Data Load EXP 1 ---------------------------------------------------------------
+# Preprocessing -----------------------------------------------------------
+
 go_to("data")
 go_to("exp1")
-# setwd(paste0(curdir,"/exp1"))
-Data1 <- read.csv('dataexp1_prior_belief.csv')
-Data1 <- subset(Data1, rt > .1 & rt < 4) # Same procedure as prior belief paper
+
+N <- 50
+for(i in 1:N){
+  if(i == 1){
+    Data1 <- read.csv(paste0('selfconfidence1A_sub',i,'.csv'),fileEncoding="UTF-8-BOM")
+  }else{
+    temp <- read.csv(paste0('selfconfidence1A_sub',i,'.csv'),fileEncoding="UTF-8-BOM")
+    Data1 <- rbind(Data1,temp)
+  }
+}
+
+head(Data1)
+
+Data1 <- subset(Data1, running == "main")
+
+Data1['response'] <- 0
+Data1$response[Data1$resp == "['n']"] <- 1
+
+Data1$rt <- Data1$rt/1000
+Data1$RTconf <- Data1$RTconf/1000
+
+Data1 <- subset(Data1,rt>.1&rt<4) #There was no trial below 200ms
+
+## Diagnostic plot per participant and task + chance performance testing
+N <- length(unique(Data1$sub)); subs <- unique(Data1$sub); exclusion <- c()
+tasks <- unique(Data1$task)
+par(mfrow=c(2,2))
+for(i in 1:N){
+  for (t in tasks) {
+    tempDat <- subset(Data1,sub==subs[i]&task==t)
+    acc_block <- with(tempDat,aggregate(cor,by=list(block=block),mean))
+    bias_block <- with(tempDat,aggregate(response,by=list(block=block),mean))
+    test <- binom.test(length(tempDat$cor[tempDat$cor==1]),n=length(tempDat$cor),alternative = "greater")
+    print(paste("In t0, sub",subs[i],"p =", round(test$p.value,3),"compared to chance"))
+    if (max(tempDat$rt)>3000) {
+      plot(acc_block,ylab="Acc (.) and bias (x)",frame=F,ylim=c(0,1));abline(h=.5,lty=2,col="grey")
+      points(bias_block,pch=4)
+      plot(tempDat$rt/1000,frame=F,col=c("black"),main=paste('subject',i,"task :",t),ylab="RT")
+      plot(tempDat$cj,frame=F,col=c("black"),ylim=c(1,6),ylab="conf")
+      plot(tempDat$RTconf,frame=F,col=c("black"),ylab="RT_conf")
+    }
+    if (test$p.value > .05) {
+      exclusion <- c(exclusion,subs[i])
+    }
+  }
+}
+
+Data1 <- subset(Data1,!(sub %in% exclusion)) #Sub 10 and 49 removed
+
+Data1$response[Data1$response==0] <- -1
+
+Data1 <- Data1[,c("sub","task","selfconf","difflevel","rt","response","cor","cj","RTconf","block")]
+names(Data1) <- c("sub","task","selfconf","coh","rt","resp","cor","cj","RTconf","block")
+write.csv(df,"dataexp1_prior_belief.csv",row.names = FALSE)
 
 condLab <- unique(Data1$selfconf); Ncond <- length(condLab) #Change column name according to condition label in dataset
 subs <- unique(Data1$sub);N<-length(subs)
@@ -100,88 +153,97 @@ for (i in 1:N) {
 }
 
 # Parameter analysis ------------------------------------------------------
-
-##Drift rate
-m <- lmer(drift ~ condition*difflevel + (1|sub),data=param_1, REML = F)
-mcondition <- lmer(drift ~ condition*difflevel + (1 + condition|sub),data=param_1, REML = F)
-anova(m,mcondition)
-mdifflevel <- lmer(drift ~ condition*difflevel + (1 + difflevel|sub),data=param_1, REML = F) #Singular
-anova(mcondition)
-
-##Bound
-m <- lmer(bound ~ condition + (1 |sub),data=param_1)
-anova(m) #There's a main effect here
-post.hoc <- glht(m, linfct = mcp(condition = 'Tukey'))
-summary(post.hoc)
-
-##Non-decision time
-m <- lmer(ter ~ condition + (1 |sub),data=param_1)
-anova(m)
-
-##alpha
-m <- lmer(alpha ~ condition + (1 |sub),data=param_1)
-anova(m)
-post.hoc <- glht(m, linfct = mcp(condition = 'Tukey'))
-summary(post.hoc)
-
-##beta
-m <- lmer(beta ~ condition + (1 |sub),data=param_1)
-anova(m)
-post.hoc <- glht(m, linfct = mcp(condition = 'Tukey'))
-summary(post.hoc)
-##V-ratio
-m <- lmer(vratio ~ condition + (1 |sub),data=param_1)
-anova(m)
+if (stat_test) {
+  ##Drift rate
+  m <- lmer(drift ~ condition*difflevel + (1|sub),data=param_1, REML = F)
+  mcondition <- lmer(drift ~ condition*difflevel + (1 + condition|sub),data=param_1, REML = F)
+  anova(m,mcondition)
+  mdifflevel <- lmer(drift ~ condition*difflevel + (1 + difflevel|sub),data=param_1, REML = F) #Singular
+  anova(mcondition)
+  
+  ##Bound
+  m <- lmer(bound ~ condition + (1 |sub),data=param_1)
+  anova(m) #There's a main effect here
+  post.hoc <- glht(m, linfct = mcp(condition = 'Tukey'))
+  summary(post.hoc)
+  
+  library(effectsize)##Non-decision time
+  m <- lmer(ter ~ condition + (1 |sub),data=param_1)
+  anova(m)
+  
+  ##alpha
+  m <- lmer(alpha ~ condition + (1 |sub),data=param_1)
+  anova(m)
+  post.hoc <- glht(m, linfct = mcp(condition = 'Tukey'))
+  summary(post.hoc)
+  
+  ##beta
+  m <- lmer(beta ~ condition + (1 |sub),data=param_1)
+  anova(m)
+  post.hoc <- glht(m, linfct = mcp(condition = 'Tukey'))
+  summary(post.hoc)
+  ##V-ratio
+  m <- lmer(vratio ~ condition + (1 |sub),data=param_1)
+  anova(m)
+}
 # Behavior analysis of prediction -------------------------------------------------
-m.int <- lmer(rt~condition*coh+(1|sub),data=Simuls1,control = lmerControl(optimizer = "bobyqa"),REML = F)
-m.cond <- lmer(rt~condition*coh+(1+condition|sub),data=Simuls1,control = lmerControl(optimizer = "bobyqa"),REML = F)
-anova(m.int,m.cond)
-m.diff <- lmer(rt~condition*coh+(1+coh|sub),data=Simuls1,control = lmerControl(optimizer = "bobyqa"),REML = F)
-anova(m.diff,m.cond)
-m.both <- lmer(rt~condition*coh+(1+coh+condition|sub),data=Simuls1,control = lmerControl(optimizer = "bobyqa"),REML = F)
-anova(m.diff,m.both)
-plot(resid(m.both),Simuls1$rt) #Linearity
-leveneTest(residuals(m.both) ~ Simuls1$condition) #Homogeneity of variance
-qqmath(m.both) #Normality
-anova(m.both)
-
-m.cond <- lmer(cj~condition*coh+(1+condition|sub),data=Simuls1,REML = F)
-m.both <- lmer(cj~condition*coh+(1+condition+coh|sub),data=Simuls1,control = lmerControl(optimizer = "bobyqa"),REML = F)
-anova(m.cond,m.both)
-m.full <- lmer(cj~condition*coh+(condition*coh|sub),data=Simuls1,
-               control = lmerControl(optimizer = "bobyqa"),REML = F)
-anova(m.both,m.full)
-plot(resid(m.full),Simuls1$cj) #Linearity
-leveneTest(residuals(m.full) ~ Simuls1$condition) #Homogeneity of variance
-qqmath(m.full) #Normality
-anova(m.full)
-post.hoc <- glht(m.full, linfct = mcp(condition = 'Tukey'))
-summary(post.hoc)
-
-m.int <- glmer(cor~condition*coh+(1|sub),data=Simuls1,family="binomial",
-               control=glmerControl(optimizer="bobyqa"))
-m.cond <- glmer(cor~condition*coh+(1+condition|sub),data=Simuls1,family="binomial",
-                control=glmerControl(optimizer="bobyqa"))
-m.diff <- glmer(cor~condition*coh+(1+coh|sub),data=Simuls1,family="binomial",
-                control=glmerControl(optimizer="bobyqa"))
-anova(m.cond,m.diff)
-plot(resid(m.cond),Simuls1$cor) #Linearity
-leveneTest(residuals(m.cond) ~ Simuls1$cor) #Homogeneity of variance
-qqmath(m.cond) #Normality
-Anova(m.cond)
+if (stat_test) {
+  m.int <- lmer(rt~condition*coh+(1|sub),data=Simuls1,control = lmerControl(optimizer = "bobyqa"),REML = F)
+  m.cond <- lmer(rt~condition*coh+(1+condition|sub),data=Simuls1,control = lmerControl(optimizer = "bobyqa"),REML = F)
+  anova(m.int,m.cond)
+  m.diff <- lmer(rt~condition*coh+(1+coh|sub),data=Simuls1,control = lmerControl(optimizer = "bobyqa"),REML = F)
+  anova(m.diff,m.cond)
+  m.both <- lmer(rt~condition*coh+(1+coh+condition|sub),data=Simuls1,control = lmerControl(optimizer = "bobyqa"),REML = F)
+  anova(m.diff,m.both)
+  plot(resid(m.both),Simuls1$rt) #Linearity
+  leveneTest(residuals(m.both) ~ Simuls1$condition) #Homogeneity of variance
+  qqmath(m.both) #Normality
+  anova(m.both)
+  
+  m.cond <- lmer(cj~condition*coh+(1+condition|sub),data=Simuls1,REML = F)
+  m.both <- lmer(cj~condition*coh+(1+condition+coh|sub),data=Simuls1,control = lmerControl(optimizer = "bobyqa"),REML = F)
+  anova(m.cond,m.both)
+  m.full <- lmer(cj~condition*coh+(condition*coh|sub),data=Simuls1,
+                 control = lmerControl(optimizer = "bobyqa"),REML = F)
+  anova(m.both,m.full)
+  plot(resid(m.full),Simuls1$cj) #Linearity
+  leveneTest(residuals(m.full) ~ Simuls1$condition) #Homogeneity of variance
+  qqmath(m.full) #Normality
+  anova(m.full)
+  post.hoc <- glht(m.full, linfct = mcp(condition = 'Tukey'))
+  summary(post.hoc)
+  
+  m.int <- glmer(cor~condition*coh+(1|sub),data=Simuls1,family="binomial",
+                 control=glmerControl(optimizer="bobyqa"))
+  m.cond <- glmer(cor~condition*coh+(1+condition|sub),data=Simuls1,family="binomial",
+                  control=glmerControl(optimizer="bobyqa"))
+  m.diff <- glmer(cor~condition*coh+(1+coh|sub),data=Simuls1,family="binomial",
+                  control=glmerControl(optimizer="bobyqa"))
+  anova(m.cond,m.diff)
+  plot(resid(m.cond),Simuls1$cor) #Linearity
+  leveneTest(residuals(m.cond) ~ Simuls1$cor) #Homogeneity of variance
+  qqmath(m.cond) #Normality
+  Anova(m.cond)
+}
 # Plot Layout -------------------------------------------------------------
 go_to("plots")
-
+cex_size <- function(size,cex.layout) {
+  return(size/(par()$ps*cex.layout))
+}
+cex.layout <- .83 
 ratio <- .66/.83 # To get comparable sizes with figure 4
-cex.ax <- 1*ratio
-cex.lab <- 1*ratio
-cex.ax <- 1*ratio
-cex.leg <- 1*ratio
-cex.datdot <- 1*ratio;lwd.dat <- 1.5*ratio
-mar.rt <- c(1,4,2,2)+.1
-mar.acc <- c(5,4,0,2)+.1
+cex.lab <- cex_size(10,cex.layout)*cex.layout # Set with mtext so ignore mfrow
+cex.ax <- cex_size(8,cex.layout)
+cex.leg <- cex_size(8,cex.layout)
+cex.datdot <- cex_size(8,cex.layout);
+lwd.dat <- 1.5*ratio
+mar.rt <- c(1,4,2,0)+.1
+mar.acc <- c(5,4,0,0)+.1
 mar.cj <- c(5,4,2,2)+.1
-tiff(file = "exp1_results.tif",width = 16,height=8,units="cm",compression="lzw",res = 1200)
+tiff(file = "exp1_results.tif",width = 13,height=8,units="cm",compression="lzw",res = 1200)
+font <- "Times new roman"
+windowsFonts(A = windowsFont(font))
+par(family="A")
 layout(matrix(c(1,2,3,3),ncol=2),widths = c(1,2))
 par(mar=c(0,0,0,0))
 par(mar=c(5,4,4,2)+.1)
@@ -223,8 +285,8 @@ xmed_sim <- xmed_sim[,c("hard","average","easy")]
 xhigh_sim <- xhigh_sim[,c("hard","average","easy")]
 
 stripchart(x, ylim=c(.6,1.1), xlim=c(-.05,n-1), vertical = TRUE, col="white",frame=F,xaxt='n',
-           main="",cex.axis=cex.ax)
-mtext("Response time (s)",2,at=.85,line=3,cex=cex.lab);
+           main="",cex.axis=cex.ax,family="A")
+mtext("Response time (s)",2,at=.85,line=3,cex=cex.lab,family="A");
 axis(1,at=0:(n-1),labels=c("","",""), cex.axis=cex.ax);
 # Empirical data
 means <- sapply(x, mean);n<- length(x)
@@ -283,9 +345,9 @@ xhigh_sim <- xhigh_sim[,c("hard","average","easy")]
 # Start plotting
 stripchart(x, ylim=c(.6,1), xlim=c(-.05,n-1), vertical = TRUE, col="white",frame=F,xaxt='n',
            main="",cex.axis=cex.ax)
-mtext("Accuracy",2,at=.8,line=3,cex=cex.lab);
-axis(1,at=0:(n-1),labels=c("Hard","Average","Easy"), cex.axis=cex.ax);
-mtext("Trial difficulty",1,3,at=1,cex=cex.lab)
+mtext("Accuracy",2,at=.8,line=3,cex=cex.lab,family="A");
+axis(1,at=0:(n-1),labels=c("Hard","Average","Easy"), cex.axis=cex.ax,family="A");
+mtext("Trial difficulty",1,3,at=1,cex=cex.lab,family="A")
 # Model predictions
 polygon(c(0:(n-1),(n-1):0),c(colMeans(x_sim,na.rm=T) + (colSds(as.matrix(x_sim))/sqrt(N)),(colMeans(x_sim,na.rm=T) - colSds(as.matrix(x_sim))/sqrt(N))[3:1]),
         border=F,col=rgb(205,51,51,51,maxColorValue = 255))
@@ -344,13 +406,16 @@ xhigh_sim <- xhigh_sim[,c("hard","average","easy")];
 
 # Start plotting
 stripchart(x, ylim=c(3.5,5.5), xlim=c(-.05,n-1), vertical = TRUE, col="white",frame=F,xaxt='n',
-           main="",cex.axis=cex.ax)
-mtext("Confidence",2,at=4.5,line=2.25,cex=cex.lab);
-axis(1,at=0:(n-1),labels=c("Hard","Average","Easy"), cex.axis=cex.ax);
-mtext("Trial difficulty",1,3,at=1,cex=cex.lab)
-legend(.05,5.5,legend=c("Positive","Average","Negative"),lty=1,bty = "n",
+           main="",cex.axis=cex.ax,family="A")
+mtext("Confidence",2,at=4.5,line=2.25,cex=cex.lab,family="A");
+axis(1,at=0:(n-1),labels=c("Hard","Average","Easy"), cex.axis=cex.ax,family="A");
+mtext("Trial difficulty",1,3,at=1,cex=cex.lab,family="A")
+# legend(.05,5.5,legend=c("Positive","Average","Negative"),lty=1,bty = "n",horiz=T,
+#        title = "Fake Feedback condition",pch=rep(16,3),inset=.1, cex = cex.leg,
+#        col=c("darkgoldenrod3","cyan4","brown3"))
+legend(-.1,5.6,legend=c("Positive","Average","Negative"),lty=1,bty = "n",horiz=T,
        title = "Fake Feedback condition",pch=rep(16,3),inset=.1, cex = cex.leg,
-       col=c("darkgoldenrod3","cyan4","brown3"))
+       col=c("darkgoldenrod3","cyan4","brown3"),y.intersp = .9)
 legend(1,4,legend=c("Empirical data", "Model prediction"), pch=c(16,15),bty="n",
        col="grey",lty = c(1,NA), border = NA,cex=cex.leg,pt.cex = c(1,2) )
 
@@ -372,5 +437,120 @@ polygon(c(0:(n-1),(n-1):0),c(colMeans(xmed_sim,na.rm=T) + (colSds(as.matrix(xmed
         border=F,col=rgb(0,139,139,51,maxColorValue = 255))
 polygon(c(0:(n-1),(n-1):0),c(colMeans(xhigh_sim,na.rm=T) + (colSds(as.matrix(xhigh_sim),na.rm=T)/sqrt(N)),(colMeans(xhigh_sim,na.rm=T) - colSds(as.matrix(xhigh_sim),na.rm=T)/sqrt(N))[3:1]),
         border=F,col=rgb(205,149,12,51,maxColorValue = 255))
+
+dev.off()
+
+# Plot estimated parameters -------------------------------------------------------------------
+go_to("plots")
+jpeg(filename = "estimated_par_exp1.tif",
+     width = 19,
+     height = 14,
+     units = 'cm',
+     res = 1200)
+windowsFonts(A = windowsFont("Times new roman"))
+layout(matrix(c(4,1,4,1,4,2,5,2,5,3,5,3),ncol=6))
+diff_order <- c("hard","average","easy")
+cond_order <- c("lowSC","mediumSC","highSC")
+cex.layout <- .66
+cexax <- cex_size(8,cex.layout)
+cexlab <- cex_size(10,cex.layout)
+cexmain <- cex_size(8,cex.layout)
+cexleg <- cex_size(8,cex.layout)
+linelab <- 2.5
+lwdmean <- 3
+col_indiv_points <- rgb(.7,.7,.7,.5)
+jit_size <- .3
+col_hard <- rgb(247,104,161,maxColorValue = 255)
+col_med <- rgb(197,27,138,maxColorValue = 255)
+col_easy <- rgb(122,1,119,maxColorValue = 255)
+leg_squeeze_within <- .5
+leg_squeeze_between <- 1
+leg_text_width <- .5*c(1,1.5,1)
+par(family="A")
+
+# DDM parameters ----------------------------------------------------------
+
+
+##Non-decision time
+par(mar=c(5,3.5,1,2)+0.1)
+plot_ter <- with(param_1,aggregate(ter,by=list(sub=sub,condition=condition),mean))
+plot_ter <- cast(plot_ter,sub~condition)
+plot_ter <- plot_ter[,cond_order] #Reorder columns to have easy -> hard
+plot(xlab="",ylab="",colMeans(plot_ter),frame=F,type='n',cex.lab=cexlab,cex.axis=cexax,
+     xlim=c(.8,Ncond+.2),ylim=c(min(plot_ter),max(plot_ter)),xaxt='n',main=NULL,family="A")
+title(ylab="Non-decision time",xlab="Feedback condition", line = linelab, 
+      cex.lab = cexlab,family="A")
+axis(1,1:Ncond,c("Negative","Average","Positive"),cex.axis=cexax,family="A")
+for(i in 1:N) lines(jitter(1:Ncond,jit_size),plot_ter[i,1:Ncond],type='b',lty=2,col=col_indiv_points,pch=19)
+points(colMeans(plot_ter),type='b',lwd=lwdmean)
+error.bar(1:Ncond,colMeans(plot_ter),colSds(plot_ter,na.rm=T)/sqrt(N),lwd=lwdmean,length=0)
+
+##Bound
+plot_bound <- with(param_1,aggregate(bound,by=list(sub=sub,condition=condition),mean))
+plot_bound <- cast(plot_bound,sub~condition)
+plot_bound <- plot_bound[,cond_order] #Reorder columns to have easy -> hard
+plot(xlab="",ylab="",colMeans(plot_bound),frame=F,type='n',cex.lab=cexlab,cex.axis=cexax,
+     xlim=c(.8,Ncond+.2),ylim=c(min(plot_bound),max(plot_bound)),xaxt='n',family="A");
+title(ylab="Bound",xlab="Feedback condition", line = linelab, cex.lab = cexlab,family="A")
+axis(1,1:Ncond,c("Negative","Average","Positive"),cex.axis=cexax,family="A")
+for(i in 1:N) lines(jitter(1:Ncond,jit_size),plot_bound[i,1:Ncond],type='b',family="A",lty=2,col=col_indiv_points,pch=19)
+points(colMeans(plot_bound),type='b',lwd=lwdmean)
+error.bar(1:Ncond,colMeans(plot_bound),colSds(plot_bound,na.rm=T)/sqrt(N),lwd=lwdmean,length=0)
+
+##Drift interaction
+plot_drift_minus <- with(subset(param_1,difflevel=="hard"),
+                         aggregate(drift,by=list(sub=sub,condition=condition),mean))
+plot_drift_minus <- cast(plot_drift_minus,sub~condition)
+plot_drift_minus <- plot_drift_minus[,cond_order] #Reorder columns to have easy -> hard
+plot(xlab="",ylab="",colMeans(plot_drift_minus),frame=F,type='n',cex.lab=cexlab,cex.axis=cexax,xlim=c(.8,Ncond+.2),
+     ylim=c(min(plot_drift_minus),.31),xaxt='n',family="A");
+title(ylab="Drift rate",xlab="Feedback condition",family="A", line = linelab, cex.lab = cexlab)
+axis(1,1:Ncond,c("Negative","Average","Positive"),cex.axis=cexax,family="A")
+points(colMeans(plot_drift_minus),type='b',lwd=lwdmean,col=col_hard)
+error.bar(1:Ncond,colMeans(plot_drift_minus),
+          colSds(plot_drift_minus,na.rm=T)/sqrt(N),lwd=lwdmean,length=0,col=col_hard)
+
+plot_drift_control <- with(subset(param_1,difflevel=="average"),
+                           aggregate(drift,by=list(sub=sub,condition=condition),mean))
+plot_drift_control <- cast(plot_drift_control,sub~condition)
+plot_drift_control <- plot_drift_control[,cond_order] #Reorder columns to have easy -> hard
+points(colMeans(plot_drift_control),type='b',lwd=lwdmean,col=col_med)
+error.bar(1:Ncond,colMeans(plot_drift_control),
+          colSds(plot_drift_control,na.rm=T)/sqrt(N),lwd=lwdmean,length=0,col=col_med)
+
+plot_drift_plus <- with(subset(param_1,difflevel=="easy"),
+                        aggregate(drift,by=list(sub=sub,condition=condition),mean))
+plot_drift_plus <- cast(plot_drift_plus,sub~condition)
+plot_drift_plus <- plot_drift_plus[,cond_order] #Reorder columns to have easy -> hard
+points(colMeans(plot_drift_plus),type='b',lwd=lwdmean,col=col_easy)
+error.bar(1:Ncond,colMeans(plot_drift_plus),
+          colSds(plot_drift_plus,na.rm=T)/sqrt(N),lwd=lwdmean,length=0,col=col_easy)
+legend("top",border=F,legend=c("Hard","Medium","Easy"),lwd=1,horiz=T,text.width = leg_text_width,
+       x.intersp = leg_squeeze_within,col=c(col_hard,col_med,col_easy),bty="n",xjust=0,
+       cex=cexleg,title = "Trial Difficulty",seg.len = 1)
+# Plot alpha/beta ---------------------------------------------------------
+##Alpha
+plot_alpha <- with(param_1,aggregate(alpha,by=list(sub=sub,condition=condition),mean))
+plot_alpha <- cast(plot_alpha,sub~condition)
+plot_alpha <- plot_alpha[,cond_order] #Reorder columns to have easy -> hard
+plot(xlab="",ylab="",colMeans(plot_alpha),frame=F,type='n',cex.lab=cexlab,cex.axis=cexax,
+     xlim=c(.8,Ncond+.2),ylim=c(min(plot_alpha),max(plot_alpha)),xaxt='n',family="A");
+title(ylab="Alpha",xlab="Feedback condition", line = linelab, cex.lab = cexlab,family="A")
+axis(1,1:Ncond,c("Negative","Average","Positive"),cex.axis=cexax,family="A")
+for(i in 1:N) lines(jitter(1:Ncond,jit_size),plot_alpha[i,1:Ncond],type='b',lty=2,col=col_indiv_points,pch=19)
+points(colMeans(plot_alpha),type='b',lwd=lwdmean)
+error.bar(1:Ncond,colMeans(plot_alpha),colSds(plot_alpha,na.rm=T)/sqrt(N),lwd=lwdmean,length=0)
+
+##Beta
+plot_beta <- with(param_1,aggregate(beta,by=list(sub=sub,condition=condition),mean))
+plot_beta <- cast(plot_beta,sub~condition)
+plot_beta <- plot_beta[,cond_order] #Reorder columns to have easy -> hard
+plot(xlab="",ylab="",colMeans(plot_beta),frame=F,type='n',cex.lab=cexlab,cex.axis=cexax,
+     xlim=c(.8,Ncond+.2),ylim=c(min(plot_beta),max(plot_beta)),xaxt='n',family="A");
+title(ylab="Beta",xlab="Feedback condition", line = linelab, cex.lab = cexlab,family="A")
+axis(1,1:Ncond,c("Negative","Average","Positive"),cex.axis=cexax,family="A")
+for(i in 1:N) lines(jitter(1:Ncond,jit_size),plot_beta[i,1:Ncond],type='b',lty=2,col=col_indiv_points,pch=19)
+points(colMeans(plot_beta),type='b',lwd=lwdmean)
+error.bar(1:Ncond,colMeans(plot_beta),colSds(plot_beta,na.rm=T)/sqrt(N),lwd=lwdmean,length=0)
 
 dev.off()

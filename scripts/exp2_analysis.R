@@ -12,12 +12,15 @@ library(lattice) # qqmath
 library(car) # Stat tests
 library(timeSeries) #ColSdS
 library(ggplot2)
+library(MALDIquant)
 source("quantilefit_function_AB.R")
 source("quantilefit_function_DDM.R")
 source("chi_square_optim_hessian.R")
+source("build_hm.R")
 
 plots <- F
 stat_tests <- F
+pcor <- T
 
 # Function ----------------------------------------------------------------
 max_count <- function(data){
@@ -434,6 +437,16 @@ if (file.exists("fitted_parameters_2step_fixed.csv")) {
   alpha_nofix <- matrix(NA,N,Ncond)
   beta_nofix <- matrix(NA,N,Ncond)
   resid_nofix <- matrix(NA,N,Ncond)
+  
+  bound_ddm_per_cond <- matrix(NA,N,Ncond)
+  v_ddm_per_cond <- matrix(NA,N,Ncond)
+  ter_ddm_per_cond <- matrix(NA,N,Ncond)
+  ## Adjust the number of drift parameters to the model loaded
+  v2_ddm_per_cond <- matrix(NA,N,Ncond);v3_ddm_per_cond <- matrix(NA,N,Ncond)
+  alpha_ddm_per_cond <- matrix(NA,N,Ncond)
+  beta_ddm_per_cond <- matrix(NA,N,Ncond)
+  resid_ddm_per_cond <- matrix(NA,N,Ncond)
+  
   go_to("fits")
   go_to("exp2")
   for(i in 1:N){
@@ -457,8 +470,6 @@ if (file.exists("fitted_parameters_2step_fixed.csv")) {
         v3_afix[i,c] <-   results_ab$optim$bestmem[14]
         resid_afix[i,c] <- results_ab$optim$bestval
       }
-      
-      
       
       file_name <- paste0('beta/results_sub_',
                           subs[i],'_',manip[i,'x'],'_AB.Rdata')
@@ -518,6 +529,25 @@ if (file.exists("fitted_parameters_2step_fixed.csv")) {
         v3_nofix[i,c] <-   results_ab$optim$bestmem[16]
         resid_nofix[i,c] <- results_ab$optim$bestval
       }
+      
+      file_name <- paste0('ddm_per_condition/results_sub_',subs[i],'_',
+                          cond_ordered[c],'_',manip[i,'x'],'_AB.Rdata')
+      if (file.exists(file_name)) {
+        load(file_name)
+        if (plots) {
+          cost_iter <- results_ab$member$bestvalit[1:results_ab$optim$iter]
+          plot(cost_iter, ylab = "Cost function", ylim=c(0, .1), frame = F, 
+               type = 'l', main = plot_title)
+        }
+        bound_ddm_per_cond[i,c] <- results_ab$optim$bestmem[1]
+        ter_ddm_per_cond[i,c] <- results_ab$optim$bestmem[2]
+        alpha_ddm_per_cond[i,c] <- results_ab$optim$bestmem[8]
+        beta_ddm_per_cond[i,c] <- results_ab$optim$bestmem[9]
+        v_ddm_per_cond[i,c] <- results_ab$optim$bestmem[10]
+        v2_ddm_per_cond[i,c] <-   results_ab$optim$bestmem[11]
+        v3_ddm_per_cond[i,c] <-   results_ab$optim$bestmem[12]
+        resid_ddm_per_cond[i,c] <- results_ab$optim$bestval
+      }
     }
   }
   param_alphafixed <- data.frame(drift = c(v_afix,v2_afix,v3_afix),
@@ -560,26 +590,52 @@ if (file.exists("fitted_parameters_2step_fixed.csv")) {
   param_nofixed$fixed_parameter <- "none"
   param_nofixed$Npar <- 6
   
-  param <- rbind(param_alphafixed,param_betafixed,param_bothfixed,param_nofixed)
+  param_pcor_cond <- data.frame(drift = c(v_ddm_per_cond,v2_ddm_per_cond,v3_ddm_per_cond),
+                           bound=rep(bound_ddm_per_cond,Ndiff),
+                           ter=rep(ter_ddm_per_cond,Ndiff),
+                           sub=rep(subs,Ndiff*Ncond),
+                           condition=rep(cond_ordered,each=N,length.out=N*Ncond*Ndiff),
+                           alpha = rep(alpha_ddm_per_cond,Ndiff),beta = rep(beta_ddm_per_cond,Ndiff),
+                           manip=rep(manip$x,Ndiff*Ncond),
+                           resid = rep(resid_ddm_per_cond,Ndiff),difflevel=rep(difficulty,each=N*Ncond))
+  param_pcor_cond$fixed_parameter <- "pcor_cond"
+  param_pcor_cond$Npar <- 6
+  
+  param_pcor <- data.frame(drift = c(v_nofix,v2_nofix,v3_nofix),
+                                bound=rep(bound_nofix,Ndiff),ter=rep(ter_nofix,Ndiff),
+                                sub=rep(subs,Ndiff*Ncond),
+                                condition=rep(cond_ordered,each=N,length.out=N*Ncond*Ndiff),
+                                alpha = NA,beta = NA,
+                                manip=rep(manip$x,Ndiff*Ncond),
+                                resid = NA,difflevel=rep(difficulty,each=N*Ncond))
+  param_pcor$fixed_parameter <- "pcor"
+  param_pcor$Npar <- 0
+  
+  param <- rbind(param_alphafixed,param_betafixed,param_bothfixed,param_nofixed,
+                 param_pcor,param_pcor_cond)
   
   go_to("results")
-  write.csv(param,file="fitted_parameters.csv")
+  write.csv(param,file="fitted_parameters_hm.csv")
   
 }
-
-
-
 # Simulation from model ---------------------------------------------------
 #Generate model simulations
 rm(Simuls_afix);rm(Simuls_bfix);rm(Simuls_bothfix);rm(Simuls_nonefix)
+rm(Simuls_pcor); rm(Simuls_pcor_cond)
 nsim <- 1
+# Simulation parameters
+dt <- .001; ev_bound <- .5; ev_window <- dt; upperRT <- 5; sigma <- .1
+timesteps <- upperRT/dt; ev_mapping <- seq(-ev_bound,ev_bound,by=ev_window)
+dir.create("heatmaps",showWarnings = F)
+go_to("heatmaps")
 for(i in 1:N){
+
   print(paste('simulating',i,'from',N))
   temp_dat <- subset(Data,sub==subs[i])
   par_afix <- subset(param,fixed_parameter=="alpha"&sub==subs[i])
   par_afix <- c(mean(par_afix$bound),mean(par_afix$ter),0,nsim,.1,.001,1,mean(par_afix$alpha),
                 #Beta for each condition, reordered to have minus,control,plus
-                with(par_afix,aggregate(beta,list(condition),mean))[c(2,1,3),"x"], 
+                with(par_afix,aggregate(beta,list(condition),mean))[c(2,1,3),"x"],
                 with(par_afix,aggregate(drift,list(difflevel),mean))$x) #Drift rate
   par_bfix <- subset(param,fixed_parameter=="beta"&sub==subs[i])
   par_bfix <- c(mean(par_bfix$bound),mean(par_bfix$ter),0,nsim,.1,.001,1,
@@ -594,16 +650,77 @@ for(i in 1:N){
   par_nonefix <- subset(param,fixed_parameter=="none"&sub==subs[i])
   par_nonefix <- c(mean(par_nonefix$bound),mean(par_nonefix$ter),0,nsim,.1,.001,1,
                    #Alpha for each condition, reordered to have minus,control,plus
-                   with(par_nonefix,aggregate(alpha,list(condition),mean))[c(2,1,3),"x"], 
+                   with(par_nonefix,aggregate(alpha,list(condition),mean))[c(2,1,3),"x"],
                    #Beta for each condition, reordered to have minus,control,plus
-                   with(par_nonefix,aggregate(beta,list(condition),mean))[c(2,1,3),"x"], 
+                   with(par_nonefix,aggregate(beta,list(condition),mean))[c(2,1,3),"x"],
                    with(par_nonefix,aggregate(drift,list(difflevel),mean))$x) #Drift rate
+  if (pcor) {
+    if (i==58) {
+      next
+    }
+    par_pcor <- subset(param,sub==subs[i])
+    par_pcor <- c(mean(par_pcor$bound),mean(par_pcor$ter),0,nsim,.1,.001,1,
+                  with(par_pcor,aggregate(drift,list(difflevel),mean))$x) #Drift rate
+    for (c in 1:Ncond) {
+      temp_dat_cond <- subset(temp_dat,condition==cond_ordered[c])
+      par_pcor_cond <- subset(param,fixed_parameter=="pcor_cond"&sub==subs[i]&condition==cond_ordered[c])
+      par_pcor_cond <- c(mean(par_pcor_cond$bound),mean(par_pcor_cond$ter),0,nsim,.1,.001,1,
+                         with(par_pcor_cond,aggregate(drift,list(difflevel),mean))$x) #Drift rate
+      
+      temp_pcor_cond <- chi_square_optim_DDM_fullconfRT(par_pcor_cond,temp_dat_cond,returnFit = 0)
+      file_name <- paste0("hm_",subs[i],"_",cond_ordered[c],".Rdata")
+      if (file.exists(file_name)) {
+        load(file_name)
+      } else {
+        hm_up <- build_hm(par_pcor_cond[(length(par_pcor_cond)-Ndiff+1):length(par_pcor_cond)],
+                          sigma = sigma, ev_bound = ev_bound, dt = dt, 
+                          ev_window = ev_window, upperRT = upperRT)
+        save(hm_up,file=file_name)
+      }
+      hm_low <- 1-hm_up
+      hmvec_low <- as.vector(hm_low); hmvec_up <- as.vector(hm_up)
+      
+      temp_pcor_cond$closest_evdnc2 <- match.closest(temp_pcor_cond$evidence2,ev_mapping)
+      temp_pcor_cond$rt2[temp_pcor_cond$rt2>5] <- 5 #heatmap doesn't go higher
+      temp_pcor_cond$rt2 <- temp_pcor_cond$rt2*timesteps/upperRT #scale with the heatmap
+      temp_pcor_cond[temp_pcor_cond$resp==1,]$cj <- hmvec_up[(temp_pcor_cond[temp_pcor_cond$resp==1,]$closest_evdnc2-1)*timesteps+round(temp_pcor_cond[temp_pcor_cond$resp==1,]$rt2)]
+      temp_pcor_cond[temp_pcor_cond$resp==-1,]$cj <- hmvec_low[(temp_pcor_cond[temp_pcor_cond$resp==-1,]$closest_evdnc2-1)*timesteps+round(temp_pcor_cond[temp_pcor_cond$resp==-1,]$rt2)]
+      
+      if(!exists('Simuls_pcor_cond')){ Simuls_pcor_cond <- cbind(temp_pcor_cond,subs[i],manip[i,'x'],cond_ordered[c])
+      }else{ Simuls_pcor_cond <- rbind(Simuls_pcor_cond,cbind(temp_pcor_cond,subs[i],manip[i,'x'],cond_ordered[c]))
+      }
+    }
+    temp_pcor <- chi_square_optim_DDM_fullconfRT(par_pcor,temp_dat,returnFit = 0)
+    file_name <- paste0("hm_",subs[i],".Rdata")
+    if (file.exists(file_name)) {
+      load(file_name)
+    } else {
+      hm_up <- build_hm(par_pcor[(length(par_pcor)-Ndiff+1):length(par_pcor)],
+                        sigma = sigma, ev_bound = ev_bound, dt = dt, 
+                        ev_window = ev_window, upperRT = upperRT)
+      save(hm_up,file=file_name)
+    }
+    hm_low <- 1-hm_up
+    hmvec_low <- as.vector(hm_low); hmvec_up <- as.vector(hm_up)
+    
+    temp_pcor$closest_evdnc2 <- match.closest(temp_pcor$evidence2,ev_mapping)
+    temp_pcor$rt2[temp_pcor$rt2>5] <- 5 #heatmap doesn't go higher
+    temp_pcor$rt2 <- temp_pcor$rt2*timesteps/upperRT #scale with the heatmap
+    temp_pcor[temp_pcor$resp==1,]$cj <- hmvec_up[(temp_pcor[temp_pcor$resp==1,]$closest_evdnc2-1)*timesteps+round(temp_pcor[temp_pcor$resp==1,]$rt2)]
+    temp_pcor[temp_pcor$resp==-1,]$cj <- hmvec_low[(temp_pcor[temp_pcor$resp==-1,]$closest_evdnc2-1)*timesteps+round(temp_pcor[temp_pcor$resp==-1,]$rt2)]
+    if(!exists('Simuls_pcor')){ Simuls_pcor <- cbind(temp_pcor,subs[i],manip[i,'x'])
+    }else{ Simuls_pcor <- rbind(Simuls_pcor,cbind(temp_pcor,subs[i],manip[i,'x']))
+    }
+    
+  }
   
   
   temp_afix <- chi_square_optim_AB_afix(par_afix,temp_dat,0)
   temp_bfix <- chi_square_optim_AB_bfix(par_bfix,temp_dat,0)
   temp_bothfix <- chi_square_optim_AB(par_bothfix,temp_dat,0)
   temp_nonefix <- chi_square_optim_AB_nofix(par_nonefix,temp_dat,0)
+  
+  
   if(!exists('Simuls_nonefix')){ Simuls_nonefix <- cbind(temp_nonefix,subs[i],manip[i,'x'])
   }else{ Simuls_nonefix <- rbind(Simuls_nonefix,cbind(temp_nonefix,subs[i],manip[i,'x']))
   }
@@ -616,6 +733,7 @@ for(i in 1:N){
   if(!exists('Simuls_afix')){ Simuls_afix <- cbind(temp_afix,subs[i],manip[i,'x'])
   }else{ Simuls_afix <- rbind(Simuls_afix,cbind(temp_afix,subs[i],manip[i,'x']))
   }
+  
 }
 Simuls_afix <- data.frame(Simuls_afix);
 Simuls_bfix <- data.frame(Simuls_bfix);
@@ -643,6 +761,26 @@ Simuls_bothfix$coh <- 0
 for (i in 1:N) {
   for(d in 1:length(coherences)) Simuls_bothfix$coh[Simuls_bothfix$sub==subs[i] & Simuls_bothfix$drift %in% c(unique(subset(Simuls_bothfix,sub==subs[i])$drift)[d],unique(subset(Simuls_bothfix,sub==subs[i])$drift)[d+3],unique(subset(Simuls_bothfix,sub==subs[i])$drift)[d+6])] <- coherences[d] #recode drift to coherence
 }
+if (pcor) {
+  names(Simuls_pcor) <- c("rt","resp","cor","evidence2","rt2","cj","drift","closest_evdnc2","sub","manip")
+  names(Simuls_pcor_cond) <- c("rt","resp","cor","evidence2","rt2","cj","drift","closest_evdnc2","sub","manip","condition")
+  
+  Simuls_pcor$coh <- 0
+  for (i in 1:N) {
+    for(d in 1:length(coherences)) Simuls_pcor$coh[Simuls_pcor$sub==subs[i] & Simuls_pcor$drift %in% c(unique(subset(Simuls_pcor,sub==subs[i])$drift)[d],unique(subset(Simuls_pcor,sub==subs[i])$drift)[d+3],unique(subset(Simuls_pcor,sub==subs[i])$drift)[d+6])] <- coherences[d] #recode drift to coherence
+  }
+  Simuls_pcor$condition <- cond_ordered
+  
+  Simuls_pcor <- Simuls_pcor[Simuls_pcor$rt < 5,]
+  
+  Simuls_pcor$cj_raw <- Simuls_pcor$cj
+  Simuls_pcor$cj <- as.numeric(cut(Simuls_pcor$cj,breaks=seq(0,1,length.out = 7),include.lowest = TRUE))
+  Simuls_pcor_cond$cj_raw <- Simuls_pcor_cond$cj
+  Simuls_pcor_cond$cj <- as.numeric(cut(Simuls_pcor_cond$cj,breaks=seq(0,1,length.out = 7),include.lowest = TRUE))
+  Simuls_pcor_alpha <- subset(Simuls_pcor,manip=="alpha")
+  Simuls_pcor_beta <- subset(Simuls_pcor,manip=="beta")
+  
+}
 Simuls_afix <- Simuls_afix[Simuls_afix$rt < 5,]
 Simuls_bfix <- Simuls_bfix[Simuls_bfix$rt < 5,]
 Simuls_nonefix <- Simuls_nonefix[Simuls_nonefix$rt < 5,]
@@ -656,7 +794,84 @@ Simuls_nonefix_alpha <- subset(Simuls_nonefix,manip=="alpha")
 Simuls_nonefix_beta <- subset(Simuls_nonefix,manip=="beta")
 Simuls_bothfix_alpha <- subset(Simuls_bothfix,manip=="alpha")
 Simuls_bothfix_beta <- subset(Simuls_bothfix,manip=="beta")
+# Compute MSE pcor models -------------------------------------------------
+if (pcor) {
+  condition <- cond_ordered
+  cost_pcor <- data.frame(sub=rep(subs,Ndiff*Ncond),
+                          condition=rep(cond_ordered,each=N,length.out=N*Ncond*Ndiff),
+                          manip=rep(manip$x,Ndiff*Ncond),
+                          resid = NA,difflevel=rep(difficulty,each=N*Ncond))
+  cost_pcor_cond <- data.frame(sub=rep(subs,Ndiff*Ncond),
+                               condition=rep(cond_ordered,each=N,length.out=N*Ncond*Ndiff),
+                               manip=rep(manip$x,Ndiff*Ncond),
+                               resid = NA,difflevel=rep(difficulty,each=N*Ncond))
+  for (i in 1:N) {
+    predictions <- subset(Simuls_pcor,sub==subs[i])
+    predictions_cond <- subset(Simuls_pcor_cond,sub==subs[i])
+    observations <- subset(Data,sub==subs[i])
+    obs_props <- NULL; pred_props <- NULL;obs_props_cj <- NULL; pred_props_cj <- NULL
+    pred_props_cond <- NULL; pred_props_cond_cj <- NULL
+    for (cond in 1:length(condition)) {
+      
+      # Separate correct and error trials
+      c_predicted <- predictions[predictions$cor == 1,]
+      e_predicted <- predictions[predictions$cor == 0,]
+      
+      c_observed <- observations[observations$cor == 1,]
+      e_observed <- observations[observations$cor == 0,]
+      
+      # now, get the proportion of responses that fall between the observed quantiles when applied to the predicted data
+      c_predicted_cj <- c_predicted[c_predicted$condition == condition[cond],]$cj
+      e_predicted_cj <- e_predicted[e_predicted$condition == condition[cond],]$cj  
+      c_obs_proportion_cj <- data.frame(var1=1:6,Freq=0)
+      e_obs_proportion_cj <- data.frame(var1=1:6,Freq=0)
+      
+      c_props_cj <- as.data.frame(table(c_observed[c_observed$condition == condition[cond],]$cj)/dim(observations)[1])
+      e_props_cj <- as.data.frame(table(e_observed[e_observed$condition == condition[cond],]$cj)/dim(observations)[1])
+      c_obs_proportion_cj[c_obs_proportion_cj$var1 %in% c_props_cj$Var1,"Freq"] <- c_obs_proportion_cj[c_obs_proportion_cj$var1 %in% c_props_cj$Var1,"Freq"] + c_props_cj$Freq
+      e_obs_proportion_cj[e_obs_proportion_cj$var1 %in% e_props_cj$Var1,"Freq"] <- e_obs_proportion_cj[e_obs_proportion_cj$var1 %in% e_props_cj$Var1,"Freq"] + e_props_cj$Freq
+      obs_props_cj <- c(obs_props_cj,c_obs_proportion_cj$Freq,e_obs_proportion_cj$Freq)
+      
+      c_predicted_cj <- factor(c_predicted_cj,levels=1:6)
+      e_predicted_cj <- factor(e_predicted_cj,levels=1:6)
+      
+      c_pred_proportion_cj <- table(c_predicted_cj)/ dim(predictions)[1]
+      
+      e_pred_proportion_cj <- table(e_predicted_cj)/ dim(predictions)[1]
+      
+      pred_props_cj <- c(pred_props_cj,c_pred_proportion_cj,e_pred_proportion_cj)
 
+      ### DO THE SAME WITH THE MODEL PER CONDITION
+      c_predicted_cond <- predictions_cond[predictions_cond$cor == 1,]
+      e_predicted_cond <- predictions_cond[predictions_cond$cor == 0,]
+      
+      c_predicted_cond_cj <- c_predicted_cond[c_predicted_cond$condition == condition[cond],]$cj
+      e_predicted_cond_cj <- e_predicted_cond[e_predicted_cond$condition == condition[cond],]$cj  
+      
+      
+      c_predicted_cond_cj <- factor(c_predicted_cond_cj,levels=1:6)
+      e_predicted_cond_cj <- factor(e_predicted_cond_cj,levels=1:6)
+      
+      c_pred_proportion_cond_cj <- table(c_predicted_cond_cj)/ dim(predictions_cond)[1]
+      
+      e_pred_proportion_cond_cj <- table(e_predicted_cond_cj)/ dim(predictions_cond)[1]
+      
+      pred_props_cond_cj <- c(pred_props_cond_cj,c_pred_proportion_cond_cj,e_pred_proportion_cond_cj)
+    }
+    
+    # Combine the quantiles for rts and cj
+    obs_props <- c(obs_props,obs_props_cj)
+    pred_props <- c(pred_props,pred_props_cj)
+    pred_props_cond <- c(pred_props_cond,pred_props_cond_cj)
+    
+    # Calculate cost
+    cost_pcor_cond[cost_pcor_cond$sub==subs[i],"resid"] = sum( (obs_props - pred_props_cond) ^ 2)
+    cost_pcor[cost_pcor$sub==subs[i],"resid"] = sum( (obs_props - pred_props) ^ 2)
+    param[param$sub==subs[i]&param$fixed_parameter=="pcor_cond","resid"] = sum( (obs_props - pred_props_cond) ^ 2)
+    param[param$sub==subs[i]&param$fixed_parameter=="pcor","resid"] = sum( (obs_props - pred_props) ^ 2)
+  }
+  
+}
 # Model Comparison --------------------------------------------------------
 bic_custom <- function(Residuals,k,n){
   return(log(n)*k+n*log(Residuals/n))
@@ -665,10 +880,10 @@ bic_custom <- function(Residuals,k,n){
 param$Ndata_points <- 12*Ncond # 6 CJ quantiles for correct/error
 param$bic <- bic_custom(param$resid,param$Npar,param$Ndata_points)
 
-param_nona <- param[complete.cases(param),]
+param_nona <- param[complete.cases(param$bic),]
+dim(param_nona)==dim(param)
 mean_bic <- with(param_nona,aggregate(bic,by=list(fixed_parameter=fixed_parameter,manip=manip),mean))
-mean_bic <- with(param,aggregate(bic,by=list(fixed_parameter=fixed_parameter,manip=manip),mean))
-mean_resid <- with(param,aggregate(resid,by=list(fixed_parameter=fixed_parameter,manip=manip),mean))
+mean_resid <- with(param_nona,aggregate(resid,by=list(fixed_parameter=fixed_parameter,manip=manip),mean))
 
 mean_bic$delta <- -99
 mean_bic[mean_bic$manip=="alpha","delta"] <- 
@@ -682,7 +897,7 @@ mean_bic[mean_bic$manip=="beta","delta"] <-
 #Generate model simulations
 nsim <- 1
 nrep <- 500
-go_to("results")
+setwd("..")
 if (!file.exists("conf_contrast.Rdata")) {
   temp_mat <- matrix(nrow=nrep,ncol=8)
   rep <- 1
@@ -805,8 +1020,13 @@ obs_means_b <- obs_means_b[complete.cases(obs_means_b),]
 obs_means_b$minus_vs_rest <- rowMeans(obs_means_b[,c("plus","control")]) - obs_means_b$minus
 diff_b_obs_allcond <- with(obs_means_b,aggregate(minus_vs_rest,list(cor=cor,sub=sub),mean))
 
-# Figure 4 ----------------------------------------------------------------
+# Figure 5 ----------------------------------------------------------------
 go_to("plots")
+
+#' Function to get the right font size in points
+cex_size <- function(size,cex.layout) {
+  return(size/(par()$ps*cex.layout))
+}
 
 # Feedback condition colors
 col_minus <- rgb(27,158,119,maxColorValue = 255)
@@ -819,39 +1039,60 @@ col_plus_shade <- rgb(117,112,179,100,maxColorValue = 255)
 mar.fb <- c(5,4,0,2)+0.1
 mar.cj <- c(5,4,0,2)+0.1
 mar.contrast <- c(5,6,0,2)+0.1
-# Adjust sizes and positions
-cex.datdot <- 1.5; lwd.dat <- 2
-cex.legend <- 1.5; cex.legend.square <- 3
-cex.phase <- 1.25
-cex.main <- 2 
-cex.axis <- 1.5; cex.lab <- 1
-cex.lab.rel <- cex.lab/.66 # In a big layout, cex for mtext and cex.lab differ
-cex.trialtype <- 1.25
+### Adjust sizes and positions
+cex.layout <- .66
+# Lines and dots
+lwd.dat <- 1.5
+cex.datdot <- 1.125
+cex.legend.square <- 3
+# Text
+cex.legend <- cex_size(8,cex.layout)
+cex.phase <- cex_size(11,cex.layout)*cex.layout
+cex.main <- cex_size(12,cex.layout)
+cex.axis <- cex_size(8,cex.layout) 
+cex.lab <- cex_size(10,cex.layout)*cex.layout
+cex.lab.rel <- cex_size(10,cex.layout) # In a big layout, cex for mtext and cex.lab differ
+cex.trialtype <- cex_size(8,cex.layout)
 adj_ydens <- -.05; 
 y_coord <- c(.5,1,1.5)
 
-tiff(filename = "figure4.tif",units="cm",width=16,height=24,res=1200,compression="lzw")
-layout(matrix(c(1,3,5,4,7,9,
-                2,3,6,4,8,10),ncol=2),height=c(.2,.1,1,.1,1,1))
+tiff(filename = "figure5.tif",units="cm",width=16,height=22,res=1200,compression="lzw")
+# layout(matrix(c(1,3,5,4,7,9,
+#                 2,3,6,4,8,10),ncol=2),height=c(.2,.1,1,.1,1,1))
+# layout(matrix(c(1,3,5,4,7,9,11,
+#                 1,3,5,4,7,9,11,
+#                 1,3,5,4,7,9,11,
+#                 1,3,5,4,7,9,12,
+#                 2,3,6,4,8,10,13,
+#                 2,3,6,4,8,10,13,
+#                 2,3,6,4,8,10,13,
+#                 2,3,6,4,8,10,14),ncol=8),height=c(.2,.1,1,.1,1,1,1))
+layout(matrix(c(1,3,5,4,7,9,11,
+                1,3,5,4,7,9,12,
+                2,3,6,4,8,10,13,
+                2,3,6,4,8,10,14),ncol=4),height=c(.2,.1,1,.1,1,1,1), widths = c(.7,.3,.7,.3))
 par(mar=c(0,0,0,0), cex.main = cex.main)
+font <- "Times new roman"
+windowsFonts(A = windowsFont(font))
+par(family="A")
 plot.new()
 legend("bottom",legend=c("Minus","Control","Plus"),
-       title = NULL,pch=rep(16,3),bty = "n",inset=0,
+       title = NULL,pch=rep(16,3),bty = "n",inset=0,pt.cex=cex.datdot,
        cex = cex.legend,col=c(col_minus,col_baseline,col_plus), horiz = T)
 legend("bottom",legend=c("Minus","Control","Plus"),
        title = NULL,pch=rep(15,3),bty = "n",inset=0,
        cex = cex.legend,horiz = T,pt.cex=cex.legend.square,
        col=c(col_minus_shade,col_baseline_shade,col_plus_shade))
-title("Experiment 2A",  line = -1.5)
+title("Experiment 2A",  line = -1)
 plot.new()
 legend("bottom",legend=c("Minus","Control","Plus"),
-       title = NULL,pch=rep(16,3),bty = "n",inset=0,
+       title = NULL,pch=rep(16,3),bty = "n",inset=0,pt.cex=cex.datdot,
        cex = cex.legend,col=c(col_minus,col_baseline,col_plus), horiz = T)
 legend("bottom",legend=c("Minus","Control","Plus"),
        title = NULL,pch=rep(15,3),bty = "n",inset=0,
        cex = cex.legend,horiz = T,pt.cex=cex.legend.square,
        col=c(col_minus_shade,col_baseline_shade,col_plus_shade))
-title("Experiment 2B", line = -1.5)
+title("Experiment 2B", line = -1)
 plot.new()
 mtext("Training phase", line = -1, cex = cex.phase)
 plot.new()
@@ -894,7 +1135,7 @@ stripchart(xminus_cor,ylim=c(0,100), xlim=c(-.05,n-1), vertical = TRUE, col="whi
            yaxt = 'n',xlab="",ylab = "",
            main = NULL,cex.main=cex.main)
 title(ylab = "Feedback", xlab = "Trial difficulty", line = 2.5,cex.lab=cex.lab.rel)
-axis(1,at=0:(n-1),labels=names(xminus_cor), cex.axis=cex.axis);
+axis(1,at=0:(n-1),labels=c("Hard","Medium","Easy"), cex.axis=cex.axis);
 axis(2, seq(0,100,20), cex.axis=cex.axis)
 means <- sapply(xminus_cor, mean)
 lines(0:(n-1),means,type='b',pch=16,cex=cex.datdot,col=col_minus,lwd=lwd.dat,lty = "dashed")
@@ -956,7 +1197,7 @@ stripchart(xminus_cor,ylim=c(0,100), xlim=c(-.05,n-1), vertical = TRUE, col="whi
            yaxt = 'n',xlab="",ylab = "",
            main = NULL,cex.main=cex.main)
 title(ylab = "Feedback", xlab = "Trial difficulty", line = 2.5,cex.lab=cex.lab.rel)
-axis(1,at=0:(n-1),labels=names(xminus_cor), cex.axis=cex.axis);
+axis(1,at=0:(n-1),labels=c("Hard","Medium","Easy"), cex.axis=cex.axis);
 axis(2, seq(0,100,20), cex.axis=cex.axis)
 means <- sapply(xminus_cor, mean)
 lines(0:(n-1),means,type='b',pch=16,cex=cex.datdot,col=col_minus,lwd=lwd.dat,lty = "dashed")
@@ -1034,7 +1275,7 @@ par(mar=mar.cj)
 stripchart(xminus_cor,ylim=c(3,5.5), xlim=c(-.05,n-1), vertical = TRUE, col="white",frame=F,xaxt='n',
            yaxt = 'n',xlab="",ylab = "",
            main = NULL)
-axis(1,at=0:(n-1),labels=names(xminus_cor), cex.axis=cex.axis);
+axis(1,at=0:(n-1),labels=c("Hard","Medium","Easy"), cex.axis=cex.axis);
 axis(2, seq(3,5.5,.5), cex.axis=cex.axis)
 title(ylab = "Confidence", xlab= "Trial difficulty",line = 2.5,cex.lab=cex.lab.rel)
 polygon(c(0:(n-1),(n-1):0),
@@ -1136,7 +1377,7 @@ par(mar=mar.cj)
 stripchart(xminus_cor,ylim=c(3,5.5), xlim=c(-.05,n-1), vertical = TRUE, col="white",frame=F,xaxt='n',
            yaxt = 'n',xlab="",ylab = "",
            main = NULL)
-axis(1,at=0:(n-1),labels=names(xminus_cor), cex.axis=cex.axis);
+axis(1,at=0:(n-1),labels=c("Hard","Medium","Easy"), cex.axis=cex.axis);
 axis(2, seq(3,5.5,.5), cex.axis=cex.axis)
 title(ylab = "Confidence", xlab= "Trial difficulty",line = 2.5,cex.lab=cex.lab.rel)
 polygon(c(0:(n-1),(n-1):0),
@@ -1218,7 +1459,7 @@ for(i in 1:length(y_coord)){
          angle=90,length=0,lwd=lwd.dat)
 }
 legend("topleft",border=F,legend=c("Empirical data",expression(paste(alpha,"-free")),expression(paste(beta,"-free"))),
-       bty='n',cex=1,lty = c(1,NA,NA),pch = c(19,15,15),lwd=2,pt.cex=c(1,2,2),
+       bty='n',cex=cex.legend,lty = c(1,NA,NA),pch = c(19,15,15),lwd=2,pt.cex=c(1,2,2),
        col=c("black",rgb(240,228,66,maxColorValue = 255),rgb(0,114,178,maxColorValue = 255)))
 # Experiment 2B -----------------------------------------------------------
 
@@ -1255,4 +1496,370 @@ for(i in 1:length(y_coord)){
          y0=y_coord[i]-.1,x1=mean(empdat[,dat_order[i]])-( sd(empdat[,dat_order[i]])/sqrt(length(empdat[,dat_order[i]]))), 
          angle=90,length=0,lwd=lwd.dat)
 }
+# dev.off()
+
+# Plot estimated parameters -------------------------------------------------------------------
+# go_to("plots")
+# jpeg(filename = "estimated_par_exp2_bestmodels.jpg",
+#      width = 16,
+#      height = 8,
+#      units = 'cm',
+#      res = 500)
+# # layout(matrix(c(1,3,2,5,1,4,2,6),ncol=2),heights = c(.05,.45,.05,.45))
+# layout(matrix(c(1,2,3,4),ncol=4),widths = c(.375,.125,.375,.125))
+cond_order <- c("minus","control","plus")
+cexax <- cex_size(8,cex.layout)
+cexlab <- cex_size(10,cex.layout)
+cexmain <- 1.75
+linelab <- 2.5
+lwdmean <- 2.25
+col_indiv_points <- rgb(.7,.7,.7,.5)
+jit_size <- .1
+col_hard <- rgb(247,104,161,maxColorValue = 255)
+col_med <- rgb(197,27,138,maxColorValue = 255)
+col_easy <- rgb(122,1,119,maxColorValue = 255)
+leg_squeeze_within <- .5
+leg_squeeze_between <- 1
+leg_text_width <- .5*c(1,1.5,1)
+# Plot alpha/beta exp2a ---------------------------------------------------------
+
+n_alpha <- sum(subs %in% Data_alpha$sub)
+par(mar=c(5,3.5,1,0))
+##Alpha
+plot_alpha <- with(subset(param_betafixed,manip=="alpha"),aggregate(alpha,by=list(sub=sub,condition=condition),mean))
+plot_alpha <- cast(plot_alpha,sub~condition)
+plot_alpha <- plot_alpha[,cond_order] #Reorder columns to have easy -> hard
+plot(xlab="",ylab="",colMeans(plot_alpha),frame=F,type='n',cex.lab=cexlab,cex.axis=cexax,
+     xlim=c(.8,Ncond+.2),ylim=c(min(plot_alpha),max(plot_alpha)),xaxt='n');
+title(ylab="Alpha",xlab="Feedback condition", line = linelab, cex.lab=cexlab)
+axis(1,1:Ncond,c("Minus","Control","Plus"),cex.axis=cexax)
+for(i in 1:n_alpha) lines(jitter(1:Ncond,amount=jit_size),plot_alpha[i,1:Ncond],type='b',lty=2,col=col_indiv_points,pch=19)
+points(colMeans(plot_alpha),type='b',lwd=lwdmean)
+error.bar(1:Ncond,colMeans(plot_alpha),colSds(plot_alpha,na.rm=T)/sqrt(n_alpha),lwd=lwdmean,length=0)
+par(mar=c(5,3.5,1,2))
+##Beta
+plot_beta <- with(subset(param_betafixed,manip=="alpha"),aggregate(beta,by=list(sub=sub),mean))
+plot_beta <- plot_beta$x
+plot(xlab="",ylab="",plot_beta,frame=F,type='n',cex.lab=cexlab,cex.axis=cexax,
+     xlim=c(.9,1.1),ylim=c(min(plot_beta),1),xaxt='n',yaxt='n');
+title(ylab="Beta",xlab="", line = linelab, cex.lab=cexlab)
+axis(1,1,"Overall",cex.axis=cexax, tick = F)
+axis(2,seq(-2.5,1,.5),seq(-2.5,1,.5),cex.axis=cexax)
+points(jitter(rep(1,n_alpha),amount=jit_size/3),plot_beta,col=col_indiv_points,pch=19)
+points(1,mean(plot_beta),pch=16,cex=cex.datdot)
+error.bar(1,mean(plot_beta),sd(plot_beta,na.rm=T)/sqrt(n_alpha),lwd=lwdmean,length=0)
+
+# Plot alpha/beta exp2b ---------------------------------------------------------
+par(mar=c(5,3.5,1,0))
+n_beta <- sum(subs %in% Data_beta$sub)
+##Beta
+plot_beta <- with(subset(param_alphafixed,manip=="beta"),aggregate(beta,by=list(sub=sub,condition=condition),mean))
+plot_beta <- cast(plot_beta,sub~condition)
+plot_beta <- plot_beta[,cond_order] #Reorder columns to have easy -> hard
+plot(xlab="",ylab="",colMeans(plot_beta),frame=F,type='n',cex.lab=cexlab,cex.axis=cexax,
+     xlim=c(.8,Ncond+.2),ylim=c(min(plot_beta),max(plot_beta)),xaxt='n');
+title(ylab="Beta",xlab="Feedback condition", line = linelab, cex.lab=cexlab)
+axis(1,1:Ncond,c("Minus","Control","Plus"),cex.axis=cexax)
+for(i in 1:n_beta) lines(jitter(1:Ncond,amount=jit_size),plot_beta[i,1:Ncond],type='b',lty=2,col=col_indiv_points,pch=19)
+points(colMeans(plot_beta),type='b',lwd=lwdmean)
+error.bar(1:Ncond,colMeans(plot_beta),colSds(plot_beta,na.rm=T)/sqrt(n_beta),lwd=lwdmean,length=0)
+
+par(mar=c(5,3.5,1,2))
+
+##Alpha
+plot_alpha <- with(subset(param_alphafixed,manip=="beta"),aggregate(alpha,by=list(sub=sub),mean))
+plot_alpha <- plot_alpha$x
+dist <- density(plot_alpha,cut=1)
+plot(xlab="",ylab="",plot_alpha,frame=F,type='n',cex.lab=cexlab,cex.axis=cexax,
+     xlim=c(.9,1.1),ylim=c(0,35),xaxt='n');
+title(ylab="Alpha",xlab="", line = linelab, cex.lab=cexlab)
+axis(1,1,"Overall",cex.axis=cexax, tick = F)
+points(jitter(rep(1,n_beta),amount=jit_size/3),plot_alpha,col=col_indiv_points,pch=19)
+points(1,mean(plot_alpha),pch=16,cex=cex.datdot)
+error.bar(1,mean(plot_alpha),sd(plot_alpha,na.rm=T)/sqrt(n_alpha),lwd=lwdmean,length=0)
+
 dev.off()
+# Analyze parameters ------------------------------------------------------
+m <- lmer(data=subset(param_betafixed,manip=="alpha"),alpha ~ condition + (1|sub))
+anova(m)
+emm <- emmeans(m, ~ condition)
+pairs(emm)
+eta_squared(anova(m),alternative="two")
+
+m <- lmer(data=subset(param_alphafixed,manip=="beta"),beta ~ condition + (1|sub))
+anova(m)
+eta_squared(anova(m),alternative="two")
+emm <- emmeans(m, ~ condition)
+pairs(emm)
+
+
+# Reviewer analysis: confidence*difficulty in error trials ----------------
+
+go_to("plots")
+# Alpha-manipulated feedback
+N_temp <- length(unique(Data_alpha$sub))
+
+cjlow <- with(subset(Data_alpha,condition=="minus"),aggregate(cj,by=list(sub,difflevel,cor),mean));
+names(cjlow) <- c('sub','difflevel','cor','cj')
+cjlow_cor <- subset(cjlow,cor==1); cjlow_err <- subset(cjlow,cor==0)
+cjlow_cor <- cast(cjlow_cor,sub~difflevel); cjlow_err <- cast(cjlow_err,sub~difflevel)
+cjmed <- with(subset(Data_alpha,condition=="control"),aggregate(cj,by=list(sub,difflevel,cor),mean));
+names(cjmed) <- c('sub','difflevel','cor','cj')
+cjmed_cor <- subset(cjmed,cor==1); cjmed_err <- subset(cjmed,cor==0)
+cjmed_cor <- cast(cjmed_cor,sub~difflevel); cjmed_err <- cast(cjmed_err,sub~difflevel)
+cjhigh <- with(subset(Data_alpha,condition=="plus"),aggregate(cj,by=list(sub,difflevel,cor),mean));
+names(cjhigh) <- c('sub','difflevel','cor','cj')
+cjhigh_cor <- subset(cjhigh,cor==1); cjhigh_err <- subset(cjhigh,cor==0)
+cjhigh_cor <- cast(cjhigh_cor,sub~difflevel); cjhigh_err <- cast(cjhigh_err,sub~difflevel)
+
+xminus_err <- cjlow_err[,c(2:4)];xbaseline_err <- cjmed_err[,c(2:4)];xplus_err <- cjhigh_err[,c(2:4)]
+xminus_err <- xminus_err[,c("hard","medium","easy")];
+xbaseline_err <- xbaseline_err[,c("hard","medium","easy")];
+xplus_err <- xplus_err[,c("hard","medium","easy")]
+
+delta_minus <- c()
+delta_baseline <- c()
+delta_plus <- c()
+for (i in 1:N_temp) {
+  delta_minus <- c(delta_minus,xminus_err[i,3]-xminus_err[i,1])
+  delta_baseline <- c(delta_baseline,xbaseline_err[i,3]-xbaseline_err[i,1])
+  delta_plus <- c(delta_plus,xplus_err[i,3]-xplus_err[i,1])
+}
+range_delta <- range(c(delta_minus,delta_plus,delta_baseline),na.rm = T)
+jpeg("diff_conf_2B.jpg",units='cm',width=8,height=8,res=300)
+par(mar=c(4,4,2,0))
+plot(density(delta_minus,na.rm=T),col=col_minus,lwd=2,type='l',main = "Experiment 2B",
+     xlab = "Easy - Hard confidence \n in incorrect trials", ylab = 'Density', 
+     ylim=c(0,.8),bty='n')
+lines(density(delta_minus,na.rm=T),col=col_minus,lwd=2)
+lines(density(delta_baseline,na.rm=T),col=col_baseline,lwd=2)
+lines(density(delta_plus,na.rm=T),col=col_plus,lwd=2)
+legend("topleft",legend=c("Minus","Control","Plus"),bty='n',title = "Feedback condition",
+       fill=c(col_minus,col_baseline,col_plus),cex=.8)
+dev.off()
+
+# Beta-manipulated feedback
+N_temp <- length(unique(Data_beta$sub))
+
+cjlow <- with(subset(Data_beta,condition=="minus"),aggregate(cj,by=list(sub,difflevel,cor),mean));
+names(cjlow) <- c('sub','difflevel','cor','cj')
+cjlow_cor <- subset(cjlow,cor==1); cjlow_err <- subset(cjlow,cor==0)
+cjlow_cor <- cast(cjlow_cor,sub~difflevel); cjlow_err <- cast(cjlow_err,sub~difflevel)
+cjmed <- with(subset(Data_beta,condition=="control"),aggregate(cj,by=list(sub,difflevel,cor),mean));
+names(cjmed) <- c('sub','difflevel','cor','cj')
+cjmed_cor <- subset(cjmed,cor==1); cjmed_err <- subset(cjmed,cor==0)
+cjmed_cor <- cast(cjmed_cor,sub~difflevel); cjmed_err <- cast(cjmed_err,sub~difflevel)
+cjhigh <- with(subset(Data_beta,condition=="plus"),aggregate(cj,by=list(sub,difflevel,cor),mean));
+names(cjhigh) <- c('sub','difflevel','cor','cj')
+cjhigh_cor <- subset(cjhigh,cor==1); cjhigh_err <- subset(cjhigh,cor==0)
+cjhigh_cor <- cast(cjhigh_cor,sub~difflevel); cjhigh_err <- cast(cjhigh_err,sub~difflevel)
+
+xminus_err <- cjlow_err[,c(2:4)];xbaseline_err <- cjmed_err[,c(2:4)];xplus_err <- cjhigh_err[,c(2:4)]
+xminus_err <- xminus_err[,c("hard","medium","easy")];
+xbaseline_err <- xbaseline_err[,c("hard","medium","easy")];
+xplus_err <- xplus_err[,c("hard","medium","easy")]
+
+delta_minus <- c()
+delta_baseline <- c()
+delta_plus <- c()
+for (i in 1:N_temp) {
+  delta_minus <- c(delta_minus,xminus_err[i,3]-xminus_err[i,1])
+  delta_baseline <- c(delta_baseline,xbaseline_err[i,3]-xbaseline_err[i,1])
+  delta_plus <- c(delta_plus,xplus_err[i,3]-xplus_err[i,1])
+}
+range_delta <- range(c(delta_minus,delta_plus,delta_baseline),na.rm = T)
+jpeg("diff_conf_2A.jpg",units='cm',width=8,height=8,res=300)
+par(mar=c(4,4,2,0))
+plot(density(delta_minus,na.rm=T),col=col_minus,lwd=2,type='l',main = "Experiment 2A",
+     xlab = "Easy - Hard confidence \n in incorrect trials", ylab = 'Density', 
+     ylim=c(0,.8),bty='n')
+lines(density(delta_minus,na.rm=T),col=col_minus,lwd=2)
+lines(density(delta_baseline,na.rm=T),col=col_baseline,lwd=2)
+lines(density(delta_plus,na.rm=T),col=col_plus,lwd=2)
+legend("topleft",legend=c("Minus","Control","Plus"),bty='n',title = "Feedback condition",
+       fill=c(col_minus,col_baseline,col_plus),cex=.8)
+dev.off()
+
+if (stat_tests) {
+  m <- lmer(data = subset(Data_alpha,cor==0), cj ~ difflevel*condition + (difflevel|sub))
+  m2 <- lmer(data = subset(Data_alpha,cor==0), cj ~ difflevel*condition + (condition|sub))
+  m3 <- lmer(data = subset(Data_alpha,cor==0), cj ~ difflevel*condition + (difflevel+condition|sub))
+  anova(m3,m2)
+  anova(m3,m)
+  anova(m3)
+  
+  mb <- lmer(data = subset(Data_beta,cor==0), cj ~ difflevel*condition + (condition|sub),
+             REML = F,control = lmerControl(optimizer='bobyqa'))
+  anova(mb)
+}
+
+
+# Change of mind exploration ----------------------------------------------
+bfree_bic <- with(subset(param,fixed_parameter=="alpha"),aggregate(bic,list(sub=sub),mean))
+names(bfree_bic) <- c("sub","bfree_bic")
+afree_bic <- with(subset(param,fixed_parameter=="beta"),aggregate(bic,list(sub=sub),mean))
+names(afree_bic) <- c("sub","afree_bic")
+
+Data <- merge(Data,afree_bic)
+Data <- merge(Data,bfree_bic)
+
+Data$bic_diff <- Data$afree_bic - Data$bfree_bic
+Data$com <- as.numeric(Data$cj<4)
+
+Data_beta <- subset(Data,manip=="beta")
+com_bic <- with(Data,aggregate(list(bic_diff,com),by=list(sub),mean))
+names(com_bic) <- c("sub","bic_diff","com")
+
+cor.test(com_bic$bic_diff,com_bic$com,method="pearson")
+jpeg("com-bic.jpg",width=8,height=8,units="cm",res=300)
+par(mar=c(4,4,2,1))
+plot(com_bic$bic_diff~com_bic$com,ylab=expression(paste(alpha,"-free - ",beta,"-free BIC")),
+     xlab = "Proportion changes of mind", bty='n',pch=1,cex=.8,
+     main=paste("r = ",round(cor(com_bic$bic_diff,com_bic$com),3)))
+abline(lm(com_bic$bic_diff~com_bic$com),lwd=2)
+dev.off()
+par(mfrow=c(1,1),mar=c(5,4,4,2)+.1)
+
+# Change in COM between conditions
+com_cond <- with(Data,aggregate(com,by=list(sub,condition),mean))
+names(com_cond) <- c("sub","condition","com")
+com_cond <- cast(com_cond, sub~condition)
+com_cond$diff <- com_cond$plus - com_cond$minus
+
+jpeg("change_com-bic.jpg",width=8,height=8,units="cm",res=300)
+par(mar=c(4,4,2,1))
+plot(com_bic$bic_diff~com_cond$diff,ylab=expression(paste(alpha,"-free - ",beta,"-free BIC")),
+     xlab = "Plus - Minus Feedback \n proportion changes of mind", bty='n',pch=1,cex=.8,
+     main=paste("r = ",round(cor(com_bic$bic_diff,com_cond$diff),3)))
+abline(lm(com_bic$bic_diff~com_cond$diff),lwd=2)
+dev.off()
+cor.test(com_bic$bic_diff,com_cond$diff)
+
+
+com_bic <- with(Data_beta,aggregate(list(bic_diff,com),by=list(sub),mean))
+names(com_bic) <- c("sub","bic_diff","com")
+
+cor.test(com_bic$bic_diff,com_bic$com,method="pearson")
+jpeg("com-bic_2b.jpg",width=8,height=8,units="cm",res=300)
+par(mar=c(4,4,2,1))
+plot(com_bic$bic_diff~com_bic$com,ylab=expression(paste(alpha,"-free - ",beta,"-free BIC")),
+     xlab = "Proportion changes of mind", bty='n',pch=1,cex=.8,
+     main=paste("r = ",round(cor(com_bic$bic_diff,com_bic$com),3)))
+abline(lm(com_bic$bic_diff~com_bic$com),lwd=2)
+dev.off()
+par(mfrow=c(1,1),mar=c(5,4,4,2)+.1)
+
+# Change in COM between conditions
+com_cond <- with(Data_beta,aggregate(com,by=list(sub,condition),mean))
+names(com_cond) <- c("sub","condition","com")
+com_cond <- cast(com_cond, sub~condition)
+com_cond$diff <- com_cond$plus - com_cond$minus
+mean(com_cond$diff)
+sd(com_cond$diff)
+
+jpeg("change_com-bic_2b.jpg",width=8,height=8,units="cm",res=300)
+par(mar=c(4,4,2,1))
+plot(com_bic$bic_diff~com_cond$diff,ylab=expression(paste(alpha,"-free - ",beta,"-free BIC")),
+     xlab = "Plus - Minus Feedback \n proportion changes of mind", bty='n',pch=1,cex=.8,
+     main=paste("r = ",round(cor(com_bic$bic_diff,com_cond$diff),3)))
+abline(lm(com_bic$bic_diff~com_cond$diff),lwd=2)
+dev.off()
+cor.test(com_bic$bic_diff,com_cond$diff)
+
+Simuls_afix_beta$com <- as.numeric(Simuls_afix_beta$cj<4)
+beta_com <- with(Simuls_afix_beta,aggregate(com,by=list(sub,condition),mean))
+names(beta_com) <- c("sub","condition","com")
+beta_com <- cast(beta_com,sub~condition)
+beta_com$diff <- beta_com$plus - beta_com$minus
+mean(beta_com$diff)
+sd(beta_com$diff)
+
+Simuls_bfix_beta$com <- as.numeric(Simuls_bfix_beta$cj<4)
+alpha_com <- with(Simuls_bfix_beta,aggregate(com,by=list(sub,condition),mean))
+names(alpha_com) <- c("sub","condition","com")
+alpha_com <- cast(alpha_com,sub~condition)
+alpha_com$diff <- alpha_com$plus - alpha_com$minus
+
+sim_diff_com <- beta_com$diff - alpha_com$diff
+cor.test(sim_diff_com,com_bic$bic_diff)
+
+train_beta$fb_com <- as.numeric(train_beta$fb<50)
+fb_com <- with(train_beta,aggregate(fb_com,by=list(sub,condition),mean))
+names(fb_com) <- c("sub","condition","fb")
+fb_com <- cast(fb_com,sub~condition)
+colMeans(fb_com)
+
+train_alpha$fb_com <- as.numeric(train_alpha$fb<50)
+mean(train_alpha$fb_com)
+
+t.test(com_cond$minus,com_cond$plus, paired = T)
+
+t.test(beta_com$minus,beta_com$plus, paired = T)
+
+t.test(with(subset(param_alphafixed,manip=="beta"&condition=="minus"),aggregate(beta,list(sub),mean))$x,
+       with(subset(param_alphafixed,manip=="beta"&condition=="plus"),aggregate(beta,list(sub),mean))$x,
+       paired = T)
+
+# Was the amount of changes of mind influences by feedback ? --------------
+m.int.a <- glmer(data=subset(Data,manip=="alpha"),com~condition*difflevel + (1|sub),family='binomial')
+m.cond.a <- glmer(data=subset(Data,manip=="alpha"),com~condition*difflevel + (condition|sub),family='binomial',
+                  control = glmerControl(optimizer = "bobyqa",optCtrl=list(maxfun=2e5)))
+anova(m.int.a,m.cond.a)
+Anova(m.cond.a)
+
+m.int.b <- glmer(data=subset(Data,manip=="beta"),com~condition*difflevel + (1|sub),family='binomial')
+m.cond.b <- glmer(data=subset(Data,manip=="beta"),com~condition*difflevel + (condition|sub),family='binomial',
+                  control = glmerControl(optimizer = "bobyqa",optCtrl=list(maxfun=2e5)))
+anova(m.int.b,m.cond.b)
+Anova(m.cond.b)
+emm <- emmeans(m.cond.b, ~ condition)
+pairs(emm)
+
+barplot(with(subset(Data,manip=="beta"),aggregate(com,by=list(condition),mean))[c(2,1,3),]$x,
+        ylab='Proportion Changes of mind', xlab = 'Feedback condition')
+axis(1,at=c(0.8,2,3.2),labels=c('Minus','Control','Plus'))
+com_sub <- with(Data,aggregate(com,by=list(sub=sub),mean))
+hist(com_sub$x)
+high_com <- com_sub[com_sub$x>.40,"sub"]
+Data_highsub <- subset(Data,sub %in% high_com)
+with(Data_highsub,aggregate(cor,by=list(sub),mean))
+
+# Check that participants did not reverse the confidence scale
+plots <- T
+par(mfrow=c(2,2))
+for(i in unique(Data_highsub$sub)){
+  for (t in tasks) {
+    tempDat <- subset(Data,sub==i&task==t)
+    tempDat[tempDat$response==-1,"response"] <- 0
+    acc_block <- with(tempDat,aggregate(cor,by=list(block=block),mean))
+    bias_block <- with(tempDat,aggregate(response,by=list(block=block),mean))
+    if (plots) {
+      plot(acc_block,ylab="Acc (.) and bias (x)",frame=F,ylim=c(0,1));abline(h=.5,lty=2,col="grey")
+      points(bias_block,pch=4)
+      plot(tempDat$rt,frame=F,col=c("black"),main=paste('subject',i,"task :",t),ylab="RT")
+      plot(tempDat$cj,frame=F,col=c("black"),ylim=c(1,6),ylab="conf")
+      plot(tempDat$RTconf,frame=F,col=c("black"),ylab="RT_conf")
+    }
+  }
+}
+
+# Check that participants still tracked their accuracy with confidence
+cj_acc <- cast(Data_highsub,value="cor",sub~cj,fun.aggregate = mean)
+cor_cj_acc <- function(X) {
+  return(cor(X,1:length(X)))
+}
+cor_highsub <- apply(cj_acc[,2:7],1,cor_cj_acc)
+
+
+Simuls_bestmodel$com <- as.numeric(Simuls_bestmodel$cj<4)
+Simuls_afix$com <- as.numeric(Simuls_afix$cj<4)
+Simuls_bfix$com <- as.numeric(Simuls_bfix$cj<4)
+
+plot(with(subset(Data,manip=="alpha"),aggregate(com,by=list(condition),mean))[c(2,1,3),]$x,type='l',ylim=c(.09,.13))
+lines(with(subset(Simuls_afix,manip=="alpha"),aggregate(com,by=list(condition),mean))[c(2,1,3),]$x,col='red')
+lines(with(subset(Simuls_bfix,manip=="alpha"),aggregate(com,by=list(condition),mean))[c(2,1,3),]$x,col='blue')
+
+
+plot(with(subset(Data,manip=="beta"),aggregate(com,by=list(condition),mean))[c(2,1,3),]$x,type='l',ylim=c(.12,.18))
+lines(with(subset(Simuls_afix,manip=="beta"),aggregate(com,by=list(condition),mean))[c(2,1,3),]$x,col='red')
+lines(with(subset(Simuls_bfix,manip=="beta"),aggregate(com,by=list(condition),mean))[c(2,1,3),]$x,col='blue')
