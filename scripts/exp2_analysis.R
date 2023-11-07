@@ -13,6 +13,7 @@ library(car) # Stat tests
 library(timeSeries) #ColSdS
 library(ggplot2)
 library(MALDIquant)
+library(DEoptim)
 source("quantilefit_function_AB.R")
 source("quantilefit_function_DDM.R")
 source("chi_square_optim_hessian.R")
@@ -402,6 +403,8 @@ go_to("results")
 if (file.exists("fitted_parameters_2step_fixed.csv")) {
   param <- read.csv("fitted_parameters_2step_fixed.csv")
 }else{
+  nsim_fit <- 20
+  
   bound_afix <- matrix(NA,N,Ncond)
   v_afix <- matrix(NA,N,Ncond)
   ter_afix <- matrix(NA,N,Ncond)
@@ -531,23 +534,32 @@ if (file.exists("fitted_parameters_2step_fixed.csv")) {
       }
       
       file_name <- paste0('ddm_per_condition/results_sub_',subs[i],'_',
-                          cond_ordered[c],'_',manip[i,'x'],'_AB.Rdata')
+                          cond_ordered[c],'_',manip[i,'x'],'_DDM.Rdata')
       if (file.exists(file_name)) {
         load(file_name)
         if (plots) {
           cost_iter <- results_ab$member$bestvalit[1:results_ab$optim$iter]
           plot(cost_iter, ylab = "Cost function", ylim=c(0, .1), frame = F, 
                type = 'l', main = plot_title)
-        }
-        bound_ddm_per_cond[i,c] <- results_ab$optim$bestmem[1]
-        ter_ddm_per_cond[i,c] <- results_ab$optim$bestmem[2]
-        alpha_ddm_per_cond[i,c] <- results_ab$optim$bestmem[8]
-        beta_ddm_per_cond[i,c] <- results_ab$optim$bestmem[9]
-        v_ddm_per_cond[i,c] <- results_ab$optim$bestmem[10]
-        v2_ddm_per_cond[i,c] <-   results_ab$optim$bestmem[11]
-        v3_ddm_per_cond[i,c] <-   results_ab$optim$bestmem[12]
-        resid_ddm_per_cond[i,c] <- results_ab$optim$bestval
+        } 
+      } else {
+        tempDat <- subset(Data,sub==subs[i]&condition==cond_ordered[c])
+        optimal_params <- DEoptim(chi_square_optim_DDM, # function to optimize
+                                  # a,ter,z,ntrials,sigma,dt,vratio,drift(s)
+                                  lower = c(0, 0, 0, nsim_fit*nrow(tempDat), .1, .001,0,0,0),
+                                  upper = c(.2, 2, 0, nsim_fit*nrow(tempDat), .1, .001,.5,.5,.5), 
+                                  observations = tempDat,control=c(itermax=1000,steptol=100,reltol=.001,NP=50), returnFit = 1)
+        results_ddm <- summary(optimal_params)
+        #save individual results
+        save(results_ddm, file=file_name)
       }
+      bound_ddm_per_cond[i,c] <- results_ddm$optim$bestmem[1]
+      ter_ddm_per_cond[i,c] <- results_ddm$optim$bestmem[2]
+      v_ddm_per_cond[i,c] <- results_ddm$optim$bestmem[7]
+      v2_ddm_per_cond[i,c] <-   results_ddm$optim$bestmem[8]
+      v3_ddm_per_cond[i,c] <-   results_ddm$optim$bestmem[9]
+      resid_ddm_per_cond[i,c] <- results_ddm$optim$bestval
+      
     }
   }
   param_alphafixed <- data.frame(drift = c(v_afix,v2_afix,v3_afix),
@@ -595,7 +607,7 @@ if (file.exists("fitted_parameters_2step_fixed.csv")) {
                            ter=rep(ter_ddm_per_cond,Ndiff),
                            sub=rep(subs,Ndiff*Ncond),
                            condition=rep(cond_ordered,each=N,length.out=N*Ncond*Ndiff),
-                           alpha = rep(alpha_ddm_per_cond,Ndiff),beta = rep(beta_ddm_per_cond,Ndiff),
+                           alpha = NA,beta = NA,
                            manip=rep(manip$x,Ndiff*Ncond),
                            resid = rep(resid_ddm_per_cond,Ndiff),difflevel=rep(difficulty,each=N*Ncond))
   param_pcor_cond$fixed_parameter <- "pcor_cond"
