@@ -1048,9 +1048,11 @@ col_baseline_shade <- rgb(217,95,2,100,maxColorValue = 255)
 col_plus <- rgb(117,112,179,maxColorValue = 255)
 col_plus_shade <- rgb(117,112,179,100,maxColorValue = 255)
 # Margins
-mar.fb <- c(5,4,0,2)+0.1
-mar.cj <- c(5,4,0,2)+0.1
+mar.fb <- c(4,3.5,0,2)+0.1
+mar.cj <- c(4,3.5,0,2)+0.1
 mar.contrast <- c(5,6,0,2)+0.1
+mar.parameters <- c(3.5,3.5,0,0)
+mar.parameters.overall <- c(3.5,3.5,0,2)
 ### Adjust sizes and positions
 cex.layout <- .66
 # Lines and dots
@@ -1067,8 +1069,12 @@ cex.lab.rel <- cex_size(10,cex.layout) # In a big layout, cex for mtext and cex.
 cex.trialtype <- cex_size(8,cex.layout)
 adj_ydens <- -.05; 
 y_coord <- c(.5,1,1.5)
+ylab_orientation <- 1 # 1 for horizontal, 0 for vertical
+# Parameter values for feedback generation
+fb_par_col <- 'black'
+fb_par_pch <- 4
 
-tiff(filename = "figure5.tif",units="cm",width=16,height=22,res=1200,compression="lzw")
+tiff(filename = "figure5.tif",units="cm",width=16,height=22,res=600,compression="lzw")
 # layout(matrix(c(1,3,5,4,7,9,
 #                 2,3,6,4,8,10),ncol=2),height=c(.2,.1,1,.1,1,1))
 # layout(matrix(c(1,3,5,4,7,9,11,
@@ -1082,9 +1088,9 @@ tiff(filename = "figure5.tif",units="cm",width=16,height=22,res=1200,compression
 layout(matrix(c(1,3,5,4,7,9,11,
                 1,3,5,4,7,9,12,
                 2,3,6,4,8,10,13,
-                2,3,6,4,8,10,14),ncol=4),height=c(.2,.1,1,.1,1,1,1), widths = c(.7,.3,.7,.3))
+                2,3,6,4,8,10,14),ncol=4),height=c(.2,.09,1,.09,1,1,1), widths = c(.7,.3,.7,.3))
 par(mar=c(0,0,0,0), cex.main = cex.main)
-font <- "Times new roman"
+font <- "Arial"
 windowsFonts(A = windowsFont(font))
 par(family="A")
 plot.new()
@@ -1148,7 +1154,7 @@ stripchart(xminus_cor,ylim=c(0,100), xlim=c(-.05,n-1), vertical = TRUE, col="whi
            main = NULL,cex.main=cex.main)
 title(ylab = "Feedback", xlab = "Trial difficulty", line = 2.5,cex.lab=cex.lab.rel)
 axis(1,at=0:(n-1),labels=c("Hard","Medium","Easy"), cex.axis=cex.axis);
-axis(2, seq(0,100,20), cex.axis=cex.axis)
+axis(2, seq(0,100,20), cex.axis=cex.axis,las=ylab_orientation)
 means <- sapply(xminus_cor, mean)
 lines(0:(n-1),means,type='b',pch=16,cex=cex.datdot,col=col_minus,lwd=lwd.dat,lty = "dashed")
 error.bar(0:(n-1),means,colSds(as.matrix(xminus_cor),na.rm=T)/sqrt(N_temp),lwd=lwd.dat,col=col_minus)
@@ -1210,7 +1216,7 @@ stripchart(xminus_cor,ylim=c(0,100), xlim=c(-.05,n-1), vertical = TRUE, col="whi
            main = NULL,cex.main=cex.main)
 title(ylab = "Feedback", xlab = "Trial difficulty", line = 2.5,cex.lab=cex.lab.rel)
 axis(1,at=0:(n-1),labels=c("Hard","Medium","Easy"), cex.axis=cex.axis);
-axis(2, seq(0,100,20), cex.axis=cex.axis)
+axis(2, seq(0,100,20), cex.axis=cex.axis,las=ylab_orientation)
 means <- sapply(xminus_cor, mean)
 lines(0:(n-1),means,type='b',pch=16,cex=cex.datdot,col=col_minus,lwd=lwd.dat,lty = "dashed")
 error.bar(0:(n-1),means,colSds(as.matrix(xminus_cor),na.rm=T)/sqrt(N_temp),lwd=lwd.dat,col=col_minus)
@@ -1288,7 +1294,7 @@ stripchart(xminus_cor,ylim=c(3,5.5), xlim=c(-.05,n-1), vertical = TRUE, col="whi
            yaxt = 'n',xlab="",ylab = "",
            main = NULL)
 axis(1,at=0:(n-1),labels=c("Hard","Medium","Easy"), cex.axis=cex.axis);
-axis(2, seq(3,5.5,.5), cex.axis=cex.axis)
+axis(2, seq(3,5.5,.5), cex.axis=cex.axis,las=ylab_orientation)
 title(ylab = "Confidence", xlab= "Trial difficulty",line = 2.5,cex.lab=cex.lab.rel)
 polygon(c(0:(n-1),(n-1):0),
         c(colMeans(xsim_cor,na.rm=T) + (colSds(as.matrix(xsim_cor))/sqrt(N_temp)),
@@ -1390,7 +1396,7 @@ stripchart(xminus_cor,ylim=c(3,5.5), xlim=c(-.05,n-1), vertical = TRUE, col="whi
            yaxt = 'n',xlab="",ylab = "",
            main = NULL)
 axis(1,at=0:(n-1),labels=c("Hard","Medium","Easy"), cex.axis=cex.axis);
-axis(2, seq(3,5.5,.5), cex.axis=cex.axis)
+axis(2, seq(3,5.5,.5), cex.axis=cex.axis,las=ylab_orientation)
 title(ylab = "Confidence", xlab= "Trial difficulty",line = 2.5,cex.lab=cex.lab.rel)
 polygon(c(0:(n-1),(n-1):0),
         c(colMeans(xsim_cor,na.rm=T) + (colSds(as.matrix(xsim_cor))/sqrt(N_temp)),
@@ -1536,19 +1542,23 @@ leg_text_width <- .5*c(1,1.5,1)
 # Plot alpha/beta exp2a ---------------------------------------------------------
 
 n_alpha <- sum(subs %in% Data_alpha$sub)
-par(mar=c(5,3.5,1,0))
+par(mar=mar.parameters)
 ##Alpha
 plot_alpha <- with(subset(param_betafixed,manip=="alpha"),aggregate(alpha,by=list(sub=sub,condition=condition),mean))
 plot_alpha <- cast(plot_alpha,sub~condition)
 plot_alpha <- plot_alpha[,cond_order] #Reorder columns to have easy -> hard
 plot(xlab="",ylab="",colMeans(plot_alpha),frame=F,type='n',cex.lab=cexlab,cex.axis=cexax,
-     xlim=c(.8,Ncond+.2),ylim=c(min(plot_alpha),max(plot_alpha)),xaxt='n');
+     xlim=c(.8,Ncond+.2),ylim=c(min(plot_alpha),max(plot_alpha)),xaxt='n',yaxt='n');
 title(ylab="Alpha",xlab="Feedback condition", line = linelab, cex.lab=cexlab)
 axis(1,1:Ncond,c("Minus","Control","Plus"),cex.axis=cexax)
+axis(2,seq(0,60,10),seq(0,60,10),cex.axis=cexax,las=ylab_orientation)
 for(i in 1:n_alpha) lines(jitter(1:Ncond,amount=jit_size),plot_alpha[i,1:Ncond],type='b',lty=2,col=col_indiv_points,pch=19)
 points(colMeans(plot_alpha),type='b',lwd=lwdmean)
 error.bar(1:Ncond,colMeans(plot_alpha),colSds(plot_alpha,na.rm=T)/sqrt(n_alpha),lwd=lwdmean,length=0)
-par(mar=c(5,3.5,1,2))
+points(c(9,18,36),type='p',pch=fb_par_pch,col=fb_par_col)
+legend("topleft",legend=c("Generative values","Empirical fits"),pch=c(fb_par_pch,19),
+       cex=cex.legend,bty="n")
+par(mar=mar.parameters.overall)
 ##Beta
 plot_beta <- with(subset(param_betafixed,manip=="alpha"),aggregate(beta,by=list(sub=sub),mean))
 plot_beta <- plot_beta$x
@@ -1556,38 +1566,43 @@ plot(xlab="",ylab="",plot_beta,frame=F,type='n',cex.lab=cexlab,cex.axis=cexax,
      xlim=c(.9,1.1),ylim=c(min(plot_beta),1),xaxt='n',yaxt='n');
 title(ylab="Beta",xlab="", line = linelab, cex.lab=cexlab)
 axis(1,1,"Overall",cex.axis=cexax, tick = F)
-axis(2,seq(-2.5,1,.5),seq(-2.5,1,.5),cex.axis=cexax)
+axis(2,seq(-2.5,1,.5),seq(-2.5,1,.5),cex.axis=cexax,las=ylab_orientation)
 points(jitter(rep(1,n_alpha),amount=jit_size/3),plot_beta,col=col_indiv_points,pch=19)
 points(1,mean(plot_beta),pch=16,cex=cex.datdot)
+points(1,0,type='p',pch=fb_par_pch,col=fb_par_col)
 error.bar(1,mean(plot_beta),sd(plot_beta,na.rm=T)/sqrt(n_alpha),lwd=lwdmean,length=0)
 
 # Plot alpha/beta exp2b ---------------------------------------------------------
-par(mar=c(5,3.5,1,0))
+par(mar=mar.parameters)
 n_beta <- sum(subs %in% Data_beta$sub)
 ##Beta
 plot_beta <- with(subset(param_alphafixed,manip=="beta"),aggregate(beta,by=list(sub=sub,condition=condition),mean))
 plot_beta <- cast(plot_beta,sub~condition)
 plot_beta <- plot_beta[,cond_order] #Reorder columns to have easy -> hard
 plot(xlab="",ylab="",colMeans(plot_beta),frame=F,type='n',cex.lab=cexlab,cex.axis=cexax,
-     xlim=c(.8,Ncond+.2),ylim=c(min(plot_beta),max(plot_beta)),xaxt='n');
+     xlim=c(.8,Ncond+.2),ylim=c(min(plot_beta),max(plot_beta)),xaxt='n',yaxt='n');
 title(ylab="Beta",xlab="Feedback condition", line = linelab, cex.lab=cexlab)
 axis(1,1:Ncond,c("Minus","Control","Plus"),cex.axis=cexax)
+axis(2,seq(-2,1,.5),seq(-2,1,.5),cex.axis=cexax,las=ylab_orientation)
 for(i in 1:n_beta) lines(jitter(1:Ncond,amount=jit_size),plot_beta[i,1:Ncond],type='b',lty=2,col=col_indiv_points,pch=19)
 points(colMeans(plot_beta),type='b',lwd=lwdmean)
+points(c(-1,0,1),type='p',pch=fb_par_pch,col=fb_par_col)
 error.bar(1:Ncond,colMeans(plot_beta),colSds(plot_beta,na.rm=T)/sqrt(n_beta),lwd=lwdmean,length=0)
 
-par(mar=c(5,3.5,1,2))
+par(mar=mar.parameters.overall)
 
 ##Alpha
 plot_alpha <- with(subset(param_alphafixed,manip=="beta"),aggregate(alpha,by=list(sub=sub),mean))
 plot_alpha <- plot_alpha$x
 dist <- density(plot_alpha,cut=1)
 plot(xlab="",ylab="",plot_alpha,frame=F,type='n',cex.lab=cexlab,cex.axis=cexax,
-     xlim=c(.9,1.1),ylim=c(0,35),xaxt='n');
+     xlim=c(.9,1.1),ylim=c(0,35),xaxt='n',yaxt='n');
 title(ylab="Alpha",xlab="", line = linelab, cex.lab=cexlab)
 axis(1,1,"Overall",cex.axis=cexax, tick = F)
+axis(2,seq(0,35,5),seq(0,35,5),cex.axis=cexax,las=ylab_orientation)
 points(jitter(rep(1,n_beta),amount=jit_size/3),plot_alpha,col=col_indiv_points,pch=19)
 points(1,mean(plot_alpha),pch=16,cex=cex.datdot)
+points(1,18,type='p',pch=fb_par_pch,col=fb_par_col)
 error.bar(1,mean(plot_alpha),sd(plot_alpha,na.rm=T)/sqrt(n_alpha),lwd=lwdmean,length=0)
 
 dev.off()
@@ -1707,47 +1722,31 @@ if (stat_tests) {
 
 
 # Change of mind exploration ----------------------------------------------
+# First, we check if indeed the beta feedback manipulation led to varying proportions
+# of trials with feedback < 50%
+train_beta$fb_com <- as.numeric(train_beta$fb<50)
+fb_com <- with(train_beta,aggregate(fb_com,by=list(sub,condition),mean))
+names(fb_com) <- c("sub","condition","fb")
+fb_com <- cast(fb_com,sub~condition)
+colMeans(fb_com)
+
+
+# Merge the BICs with the main dataframe and add a change of mind column
 bfree_bic <- with(subset(param,fixed_parameter=="alpha"),aggregate(bic,list(sub=sub),mean))
 names(bfree_bic) <- c("sub","bfree_bic")
 afree_bic <- with(subset(param,fixed_parameter=="beta"),aggregate(bic,list(sub=sub),mean))
 names(afree_bic) <- c("sub","afree_bic")
 
+# Add BICs to the main dataframe
 Data <- merge(Data,afree_bic)
 Data <- merge(Data,bfree_bic)
 
-Data$bic_diff <- Data$afree_bic - Data$bfree_bic
-Data$com <- as.numeric(Data$cj<4)
+Data$bic_diff <- Data$afree_bic - Data$bfree_bic # Difference in BICs
+Data$com <- as.numeric(Data$cj<4) # Change of mind, defined as "guess error" or lower
 
 Data_beta <- subset(Data,manip=="beta")
-com_bic <- with(Data,aggregate(list(bic_diff,com),by=list(sub),mean))
-names(com_bic) <- c("sub","bic_diff","com")
 
-cor.test(com_bic$bic_diff,com_bic$com,method="pearson")
-jpeg("com-bic.jpg",width=8,height=8,units="cm",res=300)
-par(mar=c(4,4,2,1))
-plot(com_bic$bic_diff~com_bic$com,ylab=expression(paste(alpha,"-free - ",beta,"-free BIC")),
-     xlab = "Proportion changes of mind", bty='n',pch=1,cex=.8,
-     main=paste("r = ",round(cor(com_bic$bic_diff,com_bic$com),3)))
-abline(lm(com_bic$bic_diff~com_bic$com),lwd=2)
-dev.off()
-par(mfrow=c(1,1),mar=c(5,4,4,2)+.1)
-
-# Change in COM between conditions
-com_cond <- with(Data,aggregate(com,by=list(sub,condition),mean))
-names(com_cond) <- c("sub","condition","com")
-com_cond <- cast(com_cond, sub~condition)
-com_cond$diff <- com_cond$plus - com_cond$minus
-
-jpeg("change_com-bic.jpg",width=8,height=8,units="cm",res=300)
-par(mar=c(4,4,2,1))
-plot(com_bic$bic_diff~com_cond$diff,ylab=expression(paste(alpha,"-free - ",beta,"-free BIC")),
-     xlab = "Plus - Minus Feedback \n proportion changes of mind", bty='n',pch=1,cex=.8,
-     main=paste("r = ",round(cor(com_bic$bic_diff,com_cond$diff),3)))
-abline(lm(com_bic$bic_diff~com_cond$diff),lwd=2)
-dev.off()
-cor.test(com_bic$bic_diff,com_cond$diff)
-
-
+## Correlation between change of mind and BIC difference
 com_bic <- with(Data_beta,aggregate(list(bic_diff,com),by=list(sub),mean))
 names(com_bic) <- c("sub","bic_diff","com")
 
@@ -1761,7 +1760,7 @@ abline(lm(com_bic$bic_diff~com_bic$com),lwd=2)
 dev.off()
 par(mfrow=c(1,1),mar=c(5,4,4,2)+.1)
 
-# Change in COM between conditions
+## Correlation between the feedback manipulation effect on change of mind and BIC difference
 com_cond <- with(Data_beta,aggregate(com,by=list(sub,condition),mean))
 names(com_cond) <- c("sub","condition","com")
 com_cond <- cast(com_cond, sub~condition)
@@ -1778,6 +1777,7 @@ abline(lm(com_bic$bic_diff~com_cond$diff),lwd=2)
 dev.off()
 cor.test(com_bic$bic_diff,com_cond$diff)
 
+# Check the beta-model-predicted proportions of changes of mind
 Simuls_afix_beta$com <- as.numeric(Simuls_afix_beta$cj<4)
 beta_com <- with(Simuls_afix_beta,aggregate(com,by=list(sub,condition),mean))
 names(beta_com) <- c("sub","condition","com")
@@ -1786,92 +1786,52 @@ beta_com$diff <- beta_com$plus - beta_com$minus
 mean(beta_com$diff)
 sd(beta_com$diff)
 
-Simuls_bfix_beta$com <- as.numeric(Simuls_bfix_beta$cj<4)
-alpha_com <- with(Simuls_bfix_beta,aggregate(com,by=list(sub,condition),mean))
-names(alpha_com) <- c("sub","condition","com")
-alpha_com <- cast(alpha_com,sub~condition)
-alpha_com$diff <- alpha_com$plus - alpha_com$minus
+# T-tests
+t.test(com_cond$minus,com_cond$plus, paired = T) # Feedback manipulation effect on changes of mind
 
-sim_diff_com <- beta_com$diff - alpha_com$diff
-cor.test(sim_diff_com,com_bic$bic_diff)
+t.test(beta_com$minus,beta_com$plus, paired = T) # Beta model predicted changes of mind
 
-train_beta$fb_com <- as.numeric(train_beta$fb<50)
-fb_com <- with(train_beta,aggregate(fb_com,by=list(sub,condition),mean))
-names(fb_com) <- c("sub","condition","fb")
-fb_com <- cast(fb_com,sub~condition)
-colMeans(fb_com)
-
-train_alpha$fb_com <- as.numeric(train_alpha$fb<50)
-mean(train_alpha$fb_com)
-
-t.test(com_cond$minus,com_cond$plus, paired = T)
-
-t.test(beta_com$minus,beta_com$plus, paired = T)
-
+# Difference in beta between plus and minus conditions
 t.test(with(subset(param_alphafixed,manip=="beta"&condition=="minus"),aggregate(beta,list(sub),mean))$x,
        with(subset(param_alphafixed,manip=="beta"&condition=="plus"),aggregate(beta,list(sub),mean))$x,
        paired = T)
 
-# Was the amount of changes of mind influences by feedback ? --------------
-m.int.a <- glmer(data=subset(Data,manip=="alpha"),com~condition*difflevel + (1|sub),family='binomial')
-m.cond.a <- glmer(data=subset(Data,manip=="alpha"),com~condition*difflevel + (condition|sub),family='binomial',
-                  control = glmerControl(optimizer = "bobyqa",optCtrl=list(maxfun=2e5)))
-anova(m.int.a,m.cond.a)
-Anova(m.cond.a)
+# Participants with high proportions of changes of mind --------------
 
-m.int.b <- glmer(data=subset(Data,manip=="beta"),com~condition*difflevel + (1|sub),family='binomial')
-m.cond.b <- glmer(data=subset(Data,manip=="beta"),com~condition*difflevel + (condition|sub),family='binomial',
-                  control = glmerControl(optimizer = "bobyqa",optCtrl=list(maxfun=2e5)))
-anova(m.int.b,m.cond.b)
-Anova(m.cond.b)
-emm <- emmeans(m.cond.b, ~ condition)
-pairs(emm)
-
-barplot(with(subset(Data,manip=="beta"),aggregate(com,by=list(condition),mean))[c(2,1,3),]$x,
-        ylab='Proportion Changes of mind', xlab = 'Feedback condition')
-axis(1,at=c(0.8,2,3.2),labels=c('Minus','Control','Plus'))
 com_sub <- with(Data,aggregate(com,by=list(sub=sub),mean))
-hist(com_sub$x)
+hist(com_sub$x) # few participants with high proportions of changes of mind
+
+# Let's investigate further these participants
 high_com <- com_sub[com_sub$x>.40,"sub"]
-Data_highsub <- subset(Data,sub %in% high_com)
-with(Data_highsub,aggregate(cor,by=list(sub),mean))
+Data_highsub <- subset(Data,sub %in% high_com) # 4 participants
 
-# Check that participants did not reverse the confidence scale
-plots <- T
-par(mfrow=c(2,2))
-for(i in unique(Data_highsub$sub)){
-  for (t in tasks) {
-    tempDat <- subset(Data,sub==i&task==t)
-    tempDat[tempDat$response==-1,"response"] <- 0
-    acc_block <- with(tempDat,aggregate(cor,by=list(block=block),mean))
-    bias_block <- with(tempDat,aggregate(response,by=list(block=block),mean))
-    if (plots) {
-      plot(acc_block,ylab="Acc (.) and bias (x)",frame=F,ylim=c(0,1));abline(h=.5,lty=2,col="grey")
-      points(bias_block,pch=4)
-      plot(tempDat$rt,frame=F,col=c("black"),main=paste('subject',i,"task :",t),ylab="RT")
-      plot(tempDat$cj,frame=F,col=c("black"),ylim=c(1,6),ylab="conf")
-      plot(tempDat$RTconf,frame=F,col=c("black"),ylab="RT_conf")
-    }
-  }
-}
+with(Data_highsub,aggregate(cor,by=list(sub),mean)) # One has low accuracy
 
-# Check that participants still tracked their accuracy with confidence
+# To check that these participants still understood properly the confidence scale,
+# we look at the correlation between confidence judgments and accuracy
 cj_acc <- cast(Data_highsub,value="cor",sub~cj,fun.aggregate = mean)
 cor_cj_acc <- function(X) {
   return(cor(X,1:length(X)))
 }
-cor_highsub <- apply(cj_acc[,2:7],1,cor_cj_acc)
+cor_highsub <- apply(cj_acc[,2:7],1,cor_cj_acc) # All very high positive correlations except for one
 
+# Just to be sure, we redo the statistical analyses without the one odd participant
+Data_beta_com_filtered <- subset(Data_beta, sub != cj_acc[cor_highsub<.8,"sub"])
 
-Simuls_bestmodel$com <- as.numeric(Simuls_bestmodel$cj<4)
-Simuls_afix$com <- as.numeric(Simuls_afix$cj<4)
-Simuls_bfix$com <- as.numeric(Simuls_bfix$cj<4)
+# RT
+m.cond <- lmer(rt~condition*difflevel + (condition|sub),data=Data_beta_com_filtered)
+anova(m.cond) #Results
 
-plot(with(subset(Data,manip=="alpha"),aggregate(com,by=list(condition),mean))[c(2,1,3),]$x,type='l',ylim=c(.09,.13))
-lines(with(subset(Simuls_afix,manip=="alpha"),aggregate(com,by=list(condition),mean))[c(2,1,3),]$x,col='red')
-lines(with(subset(Simuls_bfix,manip=="alpha"),aggregate(com,by=list(condition),mean))[c(2,1,3),]$x,col='blue')
+# Accuracy
+m.cond <- glmer(cor~condition*difflevel + (condition|sub),data=Data_beta_com_filtered,family=binomial)
+Anova(m.cond)
 
+# Confidence
+minteraction <- lmer(cj ~ condition*cor*difflevel + (cor*condition|sub),
+                     data = Data_beta_com_filtered,REML = F,control=lmerControl(optimize="bobyqa"));
+anova(minteraction)
 
-plot(with(subset(Data,manip=="beta"),aggregate(com,by=list(condition),mean))[c(2,1,3),]$x,type='l',ylim=c(.12,.18))
-lines(with(subset(Simuls_afix,manip=="beta"),aggregate(com,by=list(condition),mean))[c(2,1,3),]$x,col='red')
-lines(with(subset(Simuls_bfix,manip=="beta"),aggregate(com,by=list(condition),mean))[c(2,1,3),]$x,col='blue')
+mcor <- lmer(cj ~ condition*difflevel + (condition|sub),data = subset(Data_beta_com_filtered,cor==1)); 
+merr <- lmer(cj ~ condition*difflevel + (condition|sub),data = subset(Data_beta_com_filtered,cor==0)); 
+anova(mcor) #Results
+anova(merr) #Results
