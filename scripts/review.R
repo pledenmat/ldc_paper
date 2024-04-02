@@ -187,38 +187,45 @@ lines(ev,sim_c[2000,],type="l",col="black")
 legend("bottomright",legend=c("Positive Bias","Negative Bias","No Bias"),col=c("red","blue","black"),lty=1, bty ='n')
 dev.off()
 
+cex.lab <- 1.5
+cex.axis <- 1.5
+cex.main <- 1.5
+cex.legend <- 1.5
 # Plot biases in c and beta in the same figure
 jpeg("ldc_bias_c_beta.jpg",width=42,height=14,units = 'cm',res= 300)
 par(mfrow=c(1,3),mar=c(4,4,2,1))
 
 plot(ev,sim_pos_c[500,],type="l",col="red",bty='n',xlab="Evidence",ylab="Confidence",
-     main="Biases at t = 0.5s",ylim=c(0,1),lty=2)
+     main="Biases at t = 0.5s",ylim=c(0,1),lty=2, cex.lab=cex.lab, cex.axis=cex.axis, cex.main=cex.main)
 lines(ev,sim_pos_b[500,],col="red")
 lines(ev,sim_neg_c[500,],col="blue",lty=2)
 lines(ev,sim_neg_b[500,],col="blue")
 lines(ev,sim_c[500,],type="l",col="black")
 # Add legend
 legend("bottomright",col=c("red","red","blue","blue","black"),lty=c(2,1,2,1,1), bty ='n',
-       legend=c("Positive Bias in c","Positive Bias in beta","Negative Bias in c","Negative Bias in beta","No Bias"))
+       legend=c("Positive Bias in c","Positive Bias in beta","Negative Bias in c","Negative Bias in beta","No Bias"),
+       cex=cex.legend)
 
 plot(ev,sim_pos_c[1000,],type="l",col="red",bty='n',xlab="Evidence",ylab="Confidence",
-     main="Biases at t = 1s",ylim=c(0,1),lty=2)
+     main="Biases at t = 1s",ylim=c(0,1),lty=2, cex.lab=cex.lab, cex.axis=cex.axis, cex.main=cex.main)
 lines(ev,sim_pos_b[1000,],col="red")
 lines(ev,sim_neg_c[1000,],col="blue",lty=2)
 lines(ev,sim_neg_b[1000,],col="blue")
 lines(ev,sim_c[1000,],type="l",col="black")
 # Add legend
 legend("bottomright",col=c("red","red","blue","blue","black"),lty=c(2,1,2,1,1), bty ='n',
-       legend=c("Positive Bias in c","Positive Bias in beta","Negative Bias in c","Negative Bias in beta","No Bias"))
+       legend=c("Positive Bias in c","Positive Bias in beta","Negative Bias in c","Negative Bias in beta","No Bias"),
+       cex=cex.legend)
 
 plot(ev,sim_pos_c[2000,],type="l",col="red",bty='n',xlab="Evidence",ylab="Confidence",
-     main="Biases at t = 2s",ylim=c(0,1),lty=2)
+     main="Biases at t = 2s",ylim=c(0,1),lty=2, cex.lab=cex.lab, cex.axis=cex.axis, cex.main=cex.main)
 lines(ev,sim_pos_b[2000,],col="red")
 lines(ev,sim_neg_c[2000,],col="blue",lty=2)
 lines(ev,sim_neg_b[2000,],col="blue")
 lines(ev,sim_c[2000,],type="l",col="black")
 # Add legend
 legend("bottomright",col=c("red","red","blue","blue","black"),lty=c(2,1,2,1,1), bty ='n',
-       legend=c("Positive Bias in c","Positive Bias in beta","Negative Bias in c","Negative Bias in beta","No Bias"))
+       legend=c("Positive Bias in c","Positive Bias in beta","Negative Bias in c","Negative Bias in beta","No Bias"),
+       cex=cex.legend)
 
 dev.off()

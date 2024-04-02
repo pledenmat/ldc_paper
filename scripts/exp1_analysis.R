@@ -213,6 +213,13 @@ if (stat_test) {
   post.hoc <- glht(m.full, linfct = mcp(condition = 'Tukey'))
   summary(post.hoc)
   
+  m.full <- lmer(cj~selfconf*coh*cor+(selfconf+coh+cor|sub),data=Data1,
+                 control = lmerControl(optimizer = "bobyqa"),REML = F)
+  anova(m.full)
+  m.cor <- lmer(data=subset(Data1,cor==1),cj~selfconf*coh+(selfconf|sub),REML = F)
+  anova(m.cor)
+  m.error <- lmer(data=subset(Data1,cor==0),cj~selfconf*coh+(selfconf|sub),REML = F)
+  anova(m.error)
   m.int <- glmer(cor~condition*coh+(1|sub),data=Simuls1,family="binomial",
                  control=glmerControl(optimizer="bobyqa"))
   m.cond <- glmer(cor~condition*coh+(1+condition|sub),data=Simuls1,family="binomial",
@@ -236,12 +243,19 @@ cex.lab <- cex_size(10,cex.layout)*cex.layout # Set with mtext so ignore mfrow
 cex.ax <- cex_size(8,cex.layout)
 cex.leg <- cex_size(8,cex.layout)
 cex.datdot <- cex_size(8,cex.layout);
+ylab_orientation <- 1 # 1 for horizontal, 0 for vertical
 lwd.dat <- 1.5*ratio
 mar.rt <- c(1,4,2,0)+.1
 mar.acc <- c(5,4,0,0)+.1
 mar.cj <- c(5,4,2,2)+.1
+col_minus <- rgb(205,51,51,maxColorValue = 255)
+col_minus_shade <- rgb(205,51,51,51,maxColorValue = 255)
+col_baseline <- rgb(0,139,139,maxColorValue = 255)
+col_baseline_shade <- rgb(0,139,139,51,maxColorValue = 255)
+col_plus <- rgb(205,149,12,maxColorValue = 255)
+col_plus_shade <- rgb(205,149,12,51,maxColorValue = 255)
 tiff(file = "exp1_results.tif",width = 13,height=8,units="cm",compression="lzw",res = 1200)
-font <- "Times new roman"
+font <- "Arial"
 windowsFonts(A = windowsFont(font))
 par(family="A")
 layout(matrix(c(1,2,3,3),ncol=2),widths = c(1,2))
@@ -285,7 +299,7 @@ xmed_sim <- xmed_sim[,c("hard","average","easy")]
 xhigh_sim <- xhigh_sim[,c("hard","average","easy")]
 
 stripchart(x, ylim=c(.6,1.1), xlim=c(-.05,n-1), vertical = TRUE, col="white",frame=F,xaxt='n',
-           main="",cex.axis=cex.ax,family="A")
+           main="",cex.axis=cex.ax,family="A",las=ylab_orientation)
 mtext("Response time (s)",2,at=.85,line=3,cex=cex.lab,family="A");
 axis(1,at=0:(n-1),labels=c("","",""), cex.axis=cex.ax);
 # Empirical data
@@ -344,7 +358,7 @@ xhigh_sim <- xhigh_sim[,c("hard","average","easy")]
 
 # Start plotting
 stripchart(x, ylim=c(.6,1), xlim=c(-.05,n-1), vertical = TRUE, col="white",frame=F,xaxt='n',
-           main="",cex.axis=cex.ax)
+           main="",cex.axis=cex.ax,las=ylab_orientation)
 mtext("Accuracy",2,at=.8,line=3,cex=cex.lab,family="A");
 axis(1,at=0:(n-1),labels=c("Hard","Average","Easy"), cex.axis=cex.ax,family="A");
 mtext("Trial difficulty",1,3,at=1,cex=cex.lab,family="A")
@@ -370,76 +384,110 @@ error.bar(0:(n-1),means,colSds(as.matrix(xhigh),na.rm=T)/sqrt(N),lwd=lwd.dat,len
 par(mar=mar.cj)
 
 ## Experiment 1
-#Aggregate conf for data
-CJlow <- with(subset(Data1,selfconf=="lowSC"),aggregate(cj,by=list(sub,coh),mean));names(CJlow) <- c('sub','coh','cj')
-CJlow <- cast(CJlow,sub~coh,)
-CJmed <- with(subset(Data1,selfconf=="mediumSC"),aggregate(cj,by=list(sub,coh),mean));names(CJmed) <- c('sub','coh','cj')
-CJmed <- cast(CJmed,sub~coh)
-CJhigh <- with(subset(Data1,selfconf=="highSC"),aggregate(cj,by=list(sub,coh),mean));names(CJhigh) <- c('sub','coh','cj')
-CJhigh <- cast(CJhigh,sub~coh)
+cjlow <- with(subset(Data1,selfconf=="lowSC"),aggregate(cj,by=list(sub,coh,cor),mean));
+names(cjlow) <- c('sub','coh','cor','cj')
+cjlow_cor <- subset(cjlow,cor==1); cjlow_err <- subset(cjlow,cor==0)
+cjlow_cor <- cast(cjlow_cor,sub~coh); cjlow_err <- cast(cjlow_err,sub~coh)
+cjmed <- with(subset(Data1,selfconf=="mediumSC"),aggregate(cj,by=list(sub,coh,cor),mean));
+names(cjmed) <- c('sub','coh','cor','cj')
+cjmed_cor <- subset(cjmed,cor==1); cjmed_err <- subset(cjmed,cor==0)
+cjmed_cor <- cast(cjmed_cor,sub~coh); cjmed_err <- cast(cjmed_err,sub~coh)
+cjhigh <- with(subset(Data1,selfconf=="highSC"),aggregate(cj,by=list(sub,coh,cor),mean));
+names(cjhigh) <- c('sub','coh','cor','cj')
+cjhigh_cor <- subset(cjhigh,cor==1); cjhigh_err <- subset(cjhigh,cor==0)
+cjhigh_cor <- cast(cjhigh_cor,sub~coh); cjhigh_err <- cast(cjhigh_err,sub~coh)
 
-# Remove subject column
-x <- CJlow[,c(2:4)];xmed <- CJmed[,c(2:4)];xhigh <- CJhigh[,c(2:4)]
-n <- length(x)
+#Simulations
+simDat_low <- with(subset(Simuls1,condition=="lowSC"),aggregate(cj,by=list(sub,coh,cor),mean));
+names(simDat_low) <-c('sub','coh','cor','cj')
+simDat_low_cor <- subset(simDat_low,cor==1);simDat_low_err <- subset(simDat_low,cor==0)
+simDat_low_cor <- cast(simDat_low_cor,sub~coh);simDat_low_err <- cast(simDat_low_err,sub~coh)
+simDat_med <- with(subset(Simuls1,condition=="mediumSC"),aggregate(cj,by=list(sub,coh,cor),mean));
+names(simDat_med) <- c('sub','coh','cor','cj')
+simDat_med_cor <- subset(simDat_med,cor==1);simDat_med_err <- subset(simDat_med,cor==0)
+simDat_med_cor <- cast(simDat_med_cor,sub~coh);simDat_med_err <- cast(simDat_med_err,sub~coh)
+simDat_high <- with(subset(Simuls1,condition=="highSC"),aggregate(cj,by=list(sub,coh,cor),mean));
+names(simDat_high) <- c('sub','coh','cor','cj')
+simDat_high_cor <- subset(simDat_high,cor==1);simDat_high_err <- subset(simDat_high,cor==0)
+simDat_high_cor <- cast(simDat_high_cor,sub~coh);simDat_high_err <- cast(simDat_high_err,sub~coh)
 
 
-#Aggregate conf for model
-simDat_low <- subset(Simuls1,condition=="lowSC");simDat_low <- simDat_low[c('sub','coh','cj')]
-simDat_med <- subset(Simuls1,condition=="mediumSC");simDat_med <- simDat_med[c('sub','coh','cj')]
-simDat_high <- subset(Simuls1,condition=="highSC");simDat_high <- simDat_high[c('sub','coh','cj')]
+#aggregate cj for model
+xsim_cor <- simDat_low_cor[,c(2:4)];xsimmed_cor <- simDat_med_cor[,c(2:4)];xsimhigh_cor <- simDat_high_cor[,c(2:4)]
+xsim_err <- simDat_low_err[,c(2:4)];xsimmed_err <- simDat_med_err[,c(2:4)];xsimhigh_err <- simDat_high_err[,c(2:4)]
+xminus_cor <- cjlow_cor[,c(2:4)];xbaseline_cor <- cjmed_cor[,c(2:4)];xplus_cor <- cjhigh_cor[,c(2:4)]
+xminus_err <- cjlow_err[,c(2:4)];xbaseline_err <- cjmed_err[,c(2:4)];xplus_err <- cjhigh_err[,c(2:4)]
+n <- length(xminus_err)
 
-snrCJlowSim <- aggregate(.~sub+coh,simDat_low,mean)
-snrCJmedSim <- aggregate(.~sub+coh,simDat_med,mean)
-snrCJhighSim <- aggregate(.~sub+coh,simDat_high,mean)
+xminus_cor <- xminus_cor[,c("hard","average","easy")];
+xbaseline_cor <- xbaseline_cor[,c("hard","average","easy")];
+xplus_cor <- xplus_cor[,c("hard","average","easy")]
+xminus_err <- xminus_err[,c("hard","average","easy")];
+xbaseline_err <- xbaseline_err[,c("hard","average","easy")];
+xplus_err <- xplus_err[,c("hard","average","easy")]
+xsim_cor <- xsim_cor[,c("hard","average","easy")];
+xsimmed_cor <- xsimmed_cor[,c("hard","average","easy")];
+xsimhigh_cor <- xsimhigh_cor[,c("hard","average","easy")]
+xsim_err <- xsim_err[,c("hard","average","easy")];
+xsimmed_err <- xsimmed_err[,c("hard","average","easy")];
+xsimhigh_err <- xsimhigh_err[,c("hard","average","easy")]
 
-x_sim = cast(snrCJlowSim,sub~coh,value='cj');
-xmed_sim = cast(snrCJmedSim,sub~coh,value='cj');
-xhigh_sim = cast(snrCJhighSim,sub~coh,value='cj')
-
-# Reorder columns from hard to easy difficulty
-x <- x[,c("hard","average","easy")];
-xmed <- xmed[,c("hard","average","easy")];
-xhigh <- xhigh[,c("hard","average","easy")]
-x_sim <- x_sim[,c("hard","average","easy")];
-xmed_sim <- xmed_sim[,c("hard","average","easy")];
-xhigh_sim <- xhigh_sim[,c("hard","average","easy")];
-
-# Start plotting
-stripchart(x, ylim=c(3.5,5.5), xlim=c(-.05,n-1), vertical = TRUE, col="white",frame=F,xaxt='n',
-           main="",cex.axis=cex.ax,family="A")
-mtext("Confidence",2,at=4.5,line=2.25,cex=cex.lab,family="A");
+stripchart(xminus_cor,ylim=c(2.5,6), xlim=c(-.05,n-1), vertical = TRUE, col="white",frame=F,xaxt='n',
+           yaxt = 'n',xlab="",ylab = "",
+           main = NULL,family="A")
 axis(1,at=0:(n-1),labels=c("Hard","Average","Easy"), cex.axis=cex.ax,family="A");
-mtext("Trial difficulty",1,3,at=1,cex=cex.lab,family="A")
-# legend(.05,5.5,legend=c("Positive","Average","Negative"),lty=1,bty = "n",horiz=T,
-#        title = "Fake Feedback condition",pch=rep(16,3),inset=.1, cex = cex.leg,
-#        col=c("darkgoldenrod3","cyan4","brown3"))
-legend(-.1,5.6,legend=c("Positive","Average","Negative"),lty=1,bty = "n",horiz=T,
+axis(2, seq(2.5,6,.5), cex.axis=cex.ax,las=ylab_orientation,family="A")
+title(ylab = "Confidence", xlab= "Trial difficulty",line = 2.5,cex.lab=cex.lab)
+polygon(c(0:(n-1),(n-1):0),
+        c(colMeans(xsim_cor,na.rm=T) + (colSds(as.matrix(xsim_cor))/sqrt(N)),
+          (colMeans(xsim_cor,na.rm=T) - colSds(as.matrix(xsim_cor))/sqrt(N))[3:1]),
+        border=F,col=col_minus_shade)
+polygon(c(0:(n-1),(n-1):0),
+        c(colMeans(xsimmed_cor,na.rm=T) + (colSds(as.matrix(xsimmed_cor))/sqrt(N)),
+          (colMeans(xsimmed_cor,na.rm=T) - colSds(as.matrix(xsimmed_cor))/sqrt(N))[3:1]),
+        border=F,col=col_baseline_shade)
+polygon(c(0:(n-1),(n-1):0),
+        c(colMeans(xsimhigh_cor,na.rm=T) + (colSds(as.matrix(xsimhigh_cor))/sqrt(N)),
+          (colMeans(xsimhigh_cor,na.rm=T) - colSds(as.matrix(xsimhigh_cor))/sqrt(N))[3:1]),
+        border=F,col=col_plus_shade)
+polygon(c(0:(n-1),(n-1):0),
+        c(colMeans(xsim_err,na.rm=T) + (colSds(as.matrix(xsim_err))/sqrt(N)),
+          (colMeans(xsim_err,na.rm=T) - colSds(as.matrix(xsim_err))/sqrt(N))[3:1]),
+        border=F,col=col_minus_shade)
+polygon(c(0:(n-1),(n-1):0),
+        c(colMeans(xsimmed_err,na.rm=T) + (colSds(as.matrix(xsimmed_err))/sqrt(N)),
+          (colMeans(xsimmed_err,na.rm=T) - colSds(as.matrix(xsimmed_err))/sqrt(N))[3:1]),
+        border=F,col=col_baseline_shade)
+polygon(c(0:(n-1),(n-1):0),
+        c(colMeans(xsimhigh_err,na.rm=T) + (colSds(as.matrix(xsimhigh_err))/sqrt(N)),
+          (colMeans(xsimhigh_err,na.rm=T) - colSds(as.matrix(xsimhigh_err))/sqrt(N))[3:1]),
+        border=F,col=col_plus_shade)
+means <- sapply(xminus_cor, mean)
+lines(0:(n-1),means,type='b',pch=16,cex=cex.datdot,col=col_minus,lwd=lwd.dat,lty = "dashed")
+error.bar(0:(n-1),means,colSds(as.matrix(xminus_cor),na.rm=T)/sqrt(N),lwd=lwd.dat,col=col_minus)
+means <- sapply(xbaseline_cor, mean,na.rm=T)
+lines(0:(n-1),means,type='b',pch=16,cex=cex.datdot,col=col_baseline,lwd=lwd.dat,lty = "dashed")
+error.bar(0:(n-1),means,colSds(as.matrix(xbaseline_cor),na.rm=T)/sqrt(N),lwd=lwd.dat,col=col_baseline)
+means <- sapply(xplus_cor, mean,na.rm=T)
+lines(0:(n-1),means,type='b',pch=16,cex=cex.datdot,col=col_plus,lwd=lwd.dat,lty = "dashed")
+error.bar(0:(n-1),means,colSds(as.matrix(xplus_cor),na.rm=T)/sqrt(N),lwd=lwd.dat,col=col_plus)
+
+means <- sapply(xminus_err, mean, na.rm=T)
+lines(0:(n-1),means,type='b',pch=16,cex=cex.datdot,col=col_minus,lwd=lwd.dat,lty = "dotted")
+error.bar(0:(n-1),means,colSds(as.matrix(xminus_err),na.rm=T)/sqrt(N),lwd=lwd.dat,col=col_minus)
+means <- sapply(xbaseline_err, mean,na.rm=T)
+lines(0:(n-1),means,type='b',pch=16,cex=cex.datdot,col=col_baseline,lwd=lwd.dat,lty = "dotted")
+error.bar(0:(n-1),means,colSds(as.matrix(xbaseline_err),na.rm=T)/sqrt(N),lwd=lwd.dat,col=col_baseline)
+means <- sapply(xplus_err, mean,na.rm=T)
+lines(0:(n-1),means,type='b',pch=16,cex=cex.datdot,col=col_plus,lwd=lwd.dat,lty = "dotted")
+error.bar(0:(n-1),means,colSds(as.matrix(xplus_err),na.rm=T)/sqrt(N),lwd=lwd.dat,col=col_plus)
+legend(-.1,6.2,legend=c("Positive","Average","Negative"),lty=1,bty = "n",horiz=T,
        title = "Fake Feedback condition",pch=rep(16,3),inset=.1, cex = cex.leg,
        col=c("darkgoldenrod3","cyan4","brown3"),y.intersp = .9)
-legend(1,4,legend=c("Empirical data", "Model prediction"), pch=c(16,15),bty="n",
-       col="grey",lty = c(1,NA), border = NA,cex=cex.leg,pt.cex = c(1,2) )
-
-# Plot empirical data
-means <- sapply(x, mean);n<- length(x)
-lines(0:(n-1),means,type='b',pch=16,cex=cex.datdot,col="brown3",lwd=lwd.dat)
-error.bar(0:(n-1),means,colSds(as.matrix(x),na.rm=T)/sqrt(N),lwd=lwd.dat,length=.05,col="brown3")
-means <- sapply(xmed, mean,na.rm=T)
-lines(0:(n-1),means,type='b',pch=16,cex=cex.datdot,col="cyan4",lwd=lwd.dat)
-error.bar(0:(n-1),means,colSds(as.matrix(xmed),na.rm=T)/sqrt(N),lwd=lwd.dat,length=.05,col="cyan4")
-means <- sapply(xhigh, mean,na.rm=T)
-lines(0:(n-1),means,type='b',pch=16,cex=cex.datdot,col="darkgoldenrod3",lwd=lwd.dat)
-error.bar(0:(n-1),means,colSds(as.matrix(xhigh),na.rm=T)/sqrt(N),lwd=lwd.dat,length=.05,col="darkgoldenrod3")
-
-# Add model predictions
-polygon(c(0:(n-1),(n-1):0),c(colMeans(x_sim,na.rm=T) + (colSds(as.matrix(x_sim))/sqrt(N)),(colMeans(x_sim,na.rm=T) - colSds(as.matrix(x_sim))/sqrt(N))[3:1]),
-        border=F,col=rgb(205,51,51,51,maxColorValue = 255))
-polygon(c(0:(n-1),(n-1):0),c(colMeans(xmed_sim,na.rm=T) + (colSds(as.matrix(xmed_sim),na.rm=T)/sqrt(N)),(colMeans(xmed_sim,na.rm=T) - colSds(as.matrix(xmed_sim),na.rm=T)/sqrt(N))[3:1]),
-        border=F,col=rgb(0,139,139,51,maxColorValue = 255))
-polygon(c(0:(n-1),(n-1):0),c(colMeans(xhigh_sim,na.rm=T) + (colSds(as.matrix(xhigh_sim),na.rm=T)/sqrt(N)),(colMeans(xhigh_sim,na.rm=T) - colSds(as.matrix(xhigh_sim),na.rm=T)/sqrt(N))[3:1]),
-        border=F,col=rgb(205,149,12,51,maxColorValue = 255))
-
+legend("bottomleft",legend=c("Correct trials","Error trials"),
+       title = NULL,lty=c("dashed","dotted"),bty = "n",inset=0,
+       cex=cex.leg,lwd=lwd.dat,seg.len=1.5)
 dev.off()
-
 # Plot estimated parameters -------------------------------------------------------------------
 go_to("plots")
 jpeg(filename = "estimated_par_exp1.tif",
@@ -447,7 +495,7 @@ jpeg(filename = "estimated_par_exp1.tif",
      height = 14,
      units = 'cm',
      res = 1200)
-windowsFonts(A = windowsFont("Times new roman"))
+windowsFonts(A = windowsFont("Arial"))
 layout(matrix(c(4,1,4,1,4,2,5,2,5,3,5,3),ncol=6))
 diff_order <- c("hard","average","easy")
 cond_order <- c("lowSC","mediumSC","highSC")
@@ -561,12 +609,6 @@ cex_size <- function(size,cex.layout) {
 }
 
 # Feedback condition colors
-col_minus <- rgb(205,51,51,maxColorValue = 255)
-col_minus_shade <- rgb(205,51,51,51,maxColorValue = 255)
-col_baseline <- rgb(0,139,139,maxColorValue = 255)
-col_baseline_shade <- rgb(0,139,139,51,maxColorValue = 255)
-col_plus <- rgb(205,149,12,maxColorValue = 255)
-col_plus_shade <- rgb(205,149,12,51,maxColorValue = 255)
 # Margins
 mar.fb <- c(4,3.5,0,2)+0.1
 mar.cj <- c(4,3.5,0,2)+0.1
@@ -598,112 +640,6 @@ go_to("plots")
 
 N_temp <- length(unique(Data1$sub))
 
-cjlow <- with(subset(Data1,selfconf=="lowSC"),aggregate(cj,by=list(sub,coh,cor),mean));
-names(cjlow) <- c('sub','coh','cor','cj')
-cjlow_cor <- subset(cjlow,cor==1); cjlow_err <- subset(cjlow,cor==0)
-cjlow_cor <- cast(cjlow_cor,sub~coh); cjlow_err <- cast(cjlow_err,sub~coh)
-cjmed <- with(subset(Data1,selfconf=="mediumSC"),aggregate(cj,by=list(sub,coh,cor),mean));
-names(cjmed) <- c('sub','coh','cor','cj')
-cjmed_cor <- subset(cjmed,cor==1); cjmed_err <- subset(cjmed,cor==0)
-cjmed_cor <- cast(cjmed_cor,sub~coh); cjmed_err <- cast(cjmed_err,sub~coh)
-cjhigh <- with(subset(Data1,selfconf=="highSC"),aggregate(cj,by=list(sub,coh,cor),mean));
-names(cjhigh) <- c('sub','coh','cor','cj')
-cjhigh_cor <- subset(cjhigh,cor==1); cjhigh_err <- subset(cjhigh,cor==0)
-cjhigh_cor <- cast(cjhigh_cor,sub~coh); cjhigh_err <- cast(cjhigh_err,sub~coh)
-
-#Simulations
-simDat_low <- with(subset(Simuls1,condition=="lowSC"),aggregate(cj,by=list(sub,coh,cor),mean));
-names(simDat_low) <-c('sub','coh','cor','cj')
-simDat_low_cor <- subset(simDat_low,cor==1);simDat_low_err <- subset(simDat_low,cor==0)
-simDat_low_cor <- cast(simDat_low_cor,sub~coh);simDat_low_err <- cast(simDat_low_err,sub~coh)
-simDat_med <- with(subset(Simuls1,condition=="mediumSC"),aggregate(cj,by=list(sub,coh,cor),mean));
-names(simDat_med) <- c('sub','coh','cor','cj')
-simDat_med_cor <- subset(simDat_med,cor==1);simDat_med_err <- subset(simDat_med,cor==0)
-simDat_med_cor <- cast(simDat_med_cor,sub~coh);simDat_med_err <- cast(simDat_med_err,sub~coh)
-simDat_high <- with(subset(Simuls1,condition=="highSC"),aggregate(cj,by=list(sub,coh,cor),mean));
-names(simDat_high) <- c('sub','coh','cor','cj')
-simDat_high_cor <- subset(simDat_high,cor==1);simDat_high_err <- subset(simDat_high,cor==0)
-simDat_high_cor <- cast(simDat_high_cor,sub~coh);simDat_high_err <- cast(simDat_high_err,sub~coh)
-
-
-#aggregate cj for model
-xsim_cor <- simDat_low_cor[,c(2:4)];xsimmed_cor <- simDat_med_cor[,c(2:4)];xsimhigh_cor <- simDat_high_cor[,c(2:4)]
-xsim_err <- simDat_low_err[,c(2:4)];xsimmed_err <- simDat_med_err[,c(2:4)];xsimhigh_err <- simDat_high_err[,c(2:4)]
-xminus_cor <- cjlow_cor[,c(2:4)];xbaseline_cor <- cjmed_cor[,c(2:4)];xplus_cor <- cjhigh_cor[,c(2:4)]
-xminus_err <- cjlow_err[,c(2:4)];xbaseline_err <- cjmed_err[,c(2:4)];xplus_err <- cjhigh_err[,c(2:4)]
-n <- length(xminus_err)
-
-xminus_cor <- xminus_cor[,c("hard","average","easy")];
-xbaseline_cor <- xbaseline_cor[,c("hard","average","easy")];
-xplus_cor <- xplus_cor[,c("hard","average","easy")]
-xminus_err <- xminus_err[,c("hard","average","easy")];
-xbaseline_err <- xbaseline_err[,c("hard","average","easy")];
-xplus_err <- xplus_err[,c("hard","average","easy")]
-xsim_cor <- xsim_cor[,c("hard","average","easy")];
-xsimmed_cor <- xsimmed_cor[,c("hard","average","easy")];
-xsimhigh_cor <- xsimhigh_cor[,c("hard","average","easy")]
-xsim_err <- xsim_err[,c("hard","average","easy")];
-xsimmed_err <- xsimmed_err[,c("hard","average","easy")];
-xsimhigh_err <- xsimhigh_err[,c("hard","average","easy")]
-
-
-tiff("cj_exp1_accuracy.tiff",width=14,height=14,units="cm",res=300)
-stripchart(xminus_cor,ylim=c(2.5,5.6), xlim=c(-.05,n-1), vertical = TRUE, col="white",frame=F,xaxt='n',
-           yaxt = 'n',xlab="",ylab = "",
-           main = NULL)
-axis(1,at=0:(n-1),labels=c("hard","average","easy"), cex.axis=cex.axis);
-axis(2, seq(2.5,5.5,.5), cex.axis=cex.axis,las=ylab_orientation)
-title(ylab = "Confidence", xlab= "Trial difficulty",line = 2.5,cex.lab=cex.lab.rel)
-polygon(c(0:(n-1),(n-1):0),
-        c(colMeans(xsim_cor,na.rm=T) + (colSds(as.matrix(xsim_cor))/sqrt(N_temp)),
-          (colMeans(xsim_cor,na.rm=T) - colSds(as.matrix(xsim_cor))/sqrt(N_temp))[3:1]),
-        border=F,col=col_minus_shade)
-polygon(c(0:(n-1),(n-1):0),
-        c(colMeans(xsimmed_cor,na.rm=T) + (colSds(as.matrix(xsimmed_cor))/sqrt(N_temp)),
-          (colMeans(xsimmed_cor,na.rm=T) - colSds(as.matrix(xsimmed_cor))/sqrt(N_temp))[3:1]),
-        border=F,col=col_baseline_shade)
-polygon(c(0:(n-1),(n-1):0),
-        c(colMeans(xsimhigh_cor,na.rm=T) + (colSds(as.matrix(xsimhigh_cor))/sqrt(N_temp)),
-          (colMeans(xsimhigh_cor,na.rm=T) - colSds(as.matrix(xsimhigh_cor))/sqrt(N_temp))[3:1]),
-        border=F,col=col_plus_shade)
-polygon(c(0:(n-1),(n-1):0),
-        c(colMeans(xsim_err,na.rm=T) + (colSds(as.matrix(xsim_err))/sqrt(N_temp)),
-          (colMeans(xsim_err,na.rm=T) - colSds(as.matrix(xsim_err))/sqrt(N_temp))[3:1]),
-        border=F,col=col_minus_shade)
-polygon(c(0:(n-1),(n-1):0),
-        c(colMeans(xsimmed_err,na.rm=T) + (colSds(as.matrix(xsimmed_err))/sqrt(N_temp)),
-          (colMeans(xsimmed_err,na.rm=T) - colSds(as.matrix(xsimmed_err))/sqrt(N_temp))[3:1]),
-        border=F,col=col_baseline_shade)
-polygon(c(0:(n-1),(n-1):0),
-        c(colMeans(xsimhigh_err,na.rm=T) + (colSds(as.matrix(xsimhigh_err))/sqrt(N_temp)),
-          (colMeans(xsimhigh_err,na.rm=T) - colSds(as.matrix(xsimhigh_err))/sqrt(N_temp))[3:1]),
-        border=F,col=col_plus_shade)
-means <- sapply(xminus_cor, mean)
-lines(0:(n-1),means,type='b',pch=16,cex=cex.datdot,col=col_minus,lwd=lwd.dat,lty = "dashed")
-error.bar(0:(n-1),means,colSds(as.matrix(xminus_cor),na.rm=T)/sqrt(N_temp),lwd=lwd.dat,col=col_minus)
-means <- sapply(xbaseline_cor, mean,na.rm=T)
-lines(0:(n-1),means,type='b',pch=16,cex=cex.datdot,col=col_baseline,lwd=lwd.dat,lty = "dashed")
-error.bar(0:(n-1),means,colSds(as.matrix(xbaseline_cor),na.rm=T)/sqrt(N_temp),lwd=lwd.dat,col=col_baseline)
-means <- sapply(xplus_cor, mean,na.rm=T)
-lines(0:(n-1),means,type='b',pch=16,cex=cex.datdot,col=col_plus,lwd=lwd.dat,lty = "dashed")
-error.bar(0:(n-1),means,colSds(as.matrix(xplus_cor),na.rm=T)/sqrt(N_temp),lwd=lwd.dat,col=col_plus)
-
-means <- sapply(xminus_err, mean, na.rm=T)
-lines(0:(n-1),means,type='b',pch=16,cex=cex.datdot,col=col_minus,lwd=lwd.dat,lty = "dotted")
-error.bar(0:(n-1),means,colSds(as.matrix(xminus_err),na.rm=T)/sqrt(N_temp),lwd=lwd.dat,col=col_minus)
-means <- sapply(xbaseline_err, mean,na.rm=T)
-lines(0:(n-1),means,type='b',pch=16,cex=cex.datdot,col=col_baseline,lwd=lwd.dat,lty = "dotted")
-error.bar(0:(n-1),means,colSds(as.matrix(xbaseline_err),na.rm=T)/sqrt(N_temp),lwd=lwd.dat,col=col_baseline)
-means <- sapply(xplus_err, mean,na.rm=T)
-lines(0:(n-1),means,type='b',pch=16,cex=cex.datdot,col=col_plus,lwd=lwd.dat,lty = "dotted")
-error.bar(0:(n-1),means,colSds(as.matrix(xplus_err),na.rm=T)/sqrt(N_temp),lwd=lwd.dat,col=col_plus)
-legend(0,5.75,legend=c("Positive","Average","Negative"),lty=1,bty = "n",horiz=T,
-       title = "Fake Feedback condition",pch=rep(16,3),inset=.1, cex = cex.leg,
-       col=c("darkgoldenrod3","cyan4","brown3"),y.intersp = .9)
-legend("bottomleft",legend=c("Correct trials","Error trials"),
-       title = NULL,lty=c("dashed","dotted"),bty = "n",inset=0,
-       cex = cex.legend, lwd=lwd.dat,seg.len=1.5)
-dev.off()
 
 ## Look at the proportion of trials behind each data point
 trial_count <- with(Data1,aggregate(resp,list(selfconf,cor,coh,sub),length))
@@ -721,3 +657,172 @@ for (i in 3:(ncol(trial_count)-1)) {
   trial_count[,i] <- trial_count[,i]/trial_count$sum
 }
 colMeans(trial_count[,3:(ncol(trial_count)-1)]) # Average proportion of trial per cell
+
+# Confidence ~ RT ---------------------------------------------------------
+par(mfrow=c(1,1), mar = c(5,4,4,2)+.1)
+cex_size <- function(size,cex.layout) {
+  return(size/(par()$ps*cex.layout))
+}
+cex.layout <- .83 
+ratio <- .66/cex.layout # To get comparable sizes with figure 4
+cex.lab <- cex_size(10,cex.layout)*cex.layout # Set with mtext so ignore mfrow
+cex.ax <- cex_size(8,cex.layout)
+cex.leg <- cex_size(8,cex.layout)
+cex.datdot <- cex_size(8,cex.layout);
+lwd.dat <- 1.5*ratio
+mar.plot <- c(4,4,2,1)+.1
+
+Data1$rt_bin <- cut(Data1$rt,breaks=c(seq(0,1.5,.5),max(Data1$rt)))
+test <- with(Data1,aggregate(cj,by=list(sub,rt_bin),mean))
+names(test) <- c("sub","rt_bin","cj")
+test <- cast(test,sub~rt_bin)
+test <- test[,-1]
+
+
+Simuls1$rt_bin <- cut(Simuls1$rt,breaks=c(seq(0,1.5,.5),max(Simuls1$rt)))
+test_sim <- with(Simuls1,aggregate(cj,by=list(sub,rt_bin),mean))
+names(test_sim) <- c("sub","rt_bin","cj")
+test_sim <- cast(test_sim,sub~rt_bin)
+test_sim <- test_sim[,-1]
+
+
+n <- length(test)
+
+na_count_dat <- sapply(test, function(y) sum(length(which(!is.na(y)))))
+na_count_sim <- sapply(test_sim, function(y) sum(length(which(!is.na(y)))))
+
+cex.datdot <- 1
+
+go_to("plots")
+tiff("cj_rt_dist_exp1.tiff",width=8,height=8,units="cm",res=600,compression="lzw")
+par(mar=mar.plot)
+
+stripchart(test,vertical = TRUE, col="white",frame=F,xaxt='n',
+           ylim=c(3,6), xlim=c(-.05,n-1),
+           yaxt = 'n',xlab="",ylab = "",
+           main = "Experiment 1")
+mtext("Confidence",2,at=4.5,line=2.5,cex=cex.lab);
+mtext("RT bin (s)",1,at=n/2,line=2.5,cex=cex.lab);
+axis(1,at=0:(n-1),labels=c(names(test)[-4],expression(paste("(1.5,",infinity,"]"))), cex.axis=cex.ax);
+axis(2, seq(3,6,.5), cex.axis=cex.ax, las = 2)
+means <- sapply(test, mean, na.rm = T)
+lines(0:(n-1),means,type='b',pch=16,cex=cex.datdot,lwd=lwd.dat,lty=1)
+error.bar(0:(n-1),means,colSds(as.matrix(test),na.rm=T)/sqrt(na_count_dat),lwd=lwd.dat)
+polygon(c(0:(n-1),(n-1):0),
+        c(colMeans(test_sim,na.rm=T) + (colSds(as.matrix(test_sim),na.rm=T)/sqrt(na_count_sim)),
+          (colMeans(test_sim,na.rm=T) - colSds(as.matrix(test_sim),na.rm=T)/sqrt(na_count_sim))[n:1]),
+        border=F,col = rgb(0,0,0,.5))
+# Add trial accuracy as a legend
+legend("topright",c("Empirical data","Model predictions"),lty=c(1,NA),
+       lwd=1.5*ratio,col=c("black",rgb(0,0,0,.5)),border=NA,pch=c(16,15),pt.cex=c(1,2),
+       cex=cex.leg,bty="n")
+dev.off()
+
+# Confidence ~ RT (with accuracy) -----------------------------------------
+par(mfrow=c(1,1), mar = c(5,4,4,2)+.1)
+cex_size <- function(size,cex.layout) {
+  return(size/(par()$ps*cex.layout))
+}
+cex.layout <- .83 
+ratio <- .66/cex.layout # To get comparable sizes with figure 4
+cex.lab <- cex_size(10,cex.layout)*cex.layout # Set with mtext so ignore mfrow
+cex.ax <- cex_size(8,cex.layout)
+cex.leg <- cex_size(8,cex.layout)
+cex.datdot <- cex_size(8,cex.layout);
+lwd.dat <- 1.5*ratio
+mar.plot <- c(4,4,0,1)+.1
+
+Data1$rt_bin <- cut(Data1$rt,breaks=c(seq(0,2,.5),max(Data1$rt)))
+test <- with(Data1,aggregate(cj,by=list(sub,cor,rt_bin),mean))
+names(test) <- c("sub","cor","rt_bin","cj")
+test <- cast(test,sub+cor~rt_bin)
+test_cor <- test[test$cor==1,c(-1,-2)]
+test_err <- test[test$cor==0,c(-1,-2)]
+
+
+Simuls1$rt_bin <- cut(Simuls1$rt,breaks=c(seq(0,2,.5),max(Simuls1$rt)))
+test_sim <- with(Simuls1,aggregate(cj,by=list(sub,cor,rt_bin),mean))
+names(test_sim) <- c("sub","cor","rt_bin","cj")
+test_sim <- cast(test_sim,sub+cor~rt_bin)
+test_sim_cor <- test_sim[test_sim$cor==1,c(-1,-2)]
+test_sim_err <- test_sim[test_sim$cor==0,c(-1,-2)]
+
+
+n <- length(test_cor)
+
+na_count_dat_cor <- sapply(test_cor, function(y) sum(length(which(!is.na(y)))))
+na_count_dat_err <- sapply(test_err, function(y) sum(length(which(!is.na(y)))))
+na_count_sim_cor <- sapply(test_sim_cor, function(y) sum(length(which(!is.na(y)))))
+na_count_sim_err <- sapply(test_sim_err, function(y) sum(length(which(!is.na(y)))))
+
+# Adapt dot size to number of trials
+max.cex.datdot <- 2
+bin_freq <- table(Data1$rt_bin)/nrow(Data1)
+cex.datdot <- bin_freq[as.character(names(test))] * max.cex.datdot/max(bin_freq)
+cex.datdot <- 1
+
+go_to("plots")
+tiff("cj_rt_dist_exp1.tiff",width=16,height=8,units="cm",res=600,compression="lzw")
+layout(matrix(c(1,2,1,3),ncol=2),heights=c(.1,1))
+par(mar=c(0,0,0,0))
+plot.new()
+title(main="Experiment 1",cex.main=cex.lab,line=-1)
+par(mar=mar.plot)
+
+stripchart(test_cor,vertical = TRUE, col="white",frame=F,xaxt='n',
+           ylim=c(3,6), xlim=c(-.05,n-1),
+           yaxt = 'n',xlab="",ylab = "",
+           main = "")
+mtext("Confidence",2,at=4.5,line=2.5,cex=cex.lab);
+mtext("RT bin (s)",1,at=n/2,line=2.5,cex=cex.lab);
+axis(1,at=0:(n-1),labels=c(names(test_cor)[-5],expression(paste("(2,",infinity,"]"))), cex.axis=cex.ax);
+axis(2, seq(3,6,.5), cex.axis=cex.ax, las = 2)
+# Correct
+means <- sapply(test_cor, mean, na.rm = T)
+lines(0:(n-1),means,type='b',pch=16,cex=cex.datdot,lwd=lwd.dat,lty=1)
+error.bar(0:(n-1),means,colSds(as.matrix(test_cor),na.rm=T)/sqrt(na_count_dat_cor),lwd=lwd.dat)
+# Error
+means <- sapply(test_err, mean, na.rm = T)
+lines(0:(n-1),means,type='b',pch=16,cex=cex.datdot,lwd=lwd.dat,lty=2)
+error.bar(0:(n-1),means,colSds(as.matrix(test_err),na.rm=T)/sqrt(na_count_dat_err),lwd=lwd.dat)
+polygon(c(0:(n-1),(n-1):0),
+        c(colMeans(test_sim_cor,na.rm=T) + (colSds(as.matrix(test_sim_cor),na.rm=T)/sqrt(na_count_sim_cor)),
+          (colMeans(test_sim_cor,na.rm=T) - colSds(as.matrix(test_sim_cor),na.rm=T)/sqrt(na_count_sim_cor))[n:1]),
+        border=F,col = rgb(0,0,0,.5))
+polygon(c(0:(n-1),(n-1):0),
+        c(colMeans(test_sim_err,na.rm=T) + (colSds(as.matrix(test_sim_err),na.rm=T)/sqrt(na_count_sim_err)),
+          (colMeans(test_sim_err,na.rm=T) - colSds(as.matrix(test_sim_err),na.rm=T)/sqrt(na_count_sim_err))[n:1]),
+        border=F,col = rgb(0,0,0,.5))
+# Add trial accuracy as a legend
+legend("topright",c("Empirical correct","Empirical incorrect","Model predictions"),lty=c(1,2,NA),
+       lwd=1.5*ratio,col=c("black","black",rgb(0,0,0,.5)),border=NA,pch=c(NA,NA,15),pt.cex=2,
+       cex=cex.leg,bty="n")
+# dev.off()
+
+# Let's plot the distribution of RT for corrects and errors
+go_to("plots")
+
+breaks <- seq(0,4,.25)
+Simuls1 <- subset(Simuls1,rt<4)
+# tiff("rt_dist_exp1.tiff",width=8,height=8,units="cm",res=600,compression="lzw")
+
+par(mar=mar.plot)
+
+dist_plot <- hist(Data1$rt[Data1$cor==1],breaks=breaks,col=rgb(0,1,0,.5),border=NA,main="",
+                  xlab="",ylab="",cex.lab=cex.lab,cex.axis=cex.ax,xaxt='n')
+axis(1,at=seq(0,4,.5),labels=seq(0,4,.5),cex.axis=cex.ax)
+mtext("Number of trials",2,at=max(dist_plot$counts)/2,line=2.5,cex=cex.lab);
+mtext("RT (s)",1,at=2,line=2.5,cex=cex.lab);
+hist(Data1$rt[Data1$cor==0],breaks=breaks,col=rgb(1,0,0,.5),border=NA,add=T)
+# Add model predictions as lines
+pred_correct <- hist(Simuls1$rt[Simuls1$cor==1],breaks=breaks,plot=F)
+lines(breaks[-1]-.125,pred_correct$counts,col="darkgreen",lwd=2,lty=1)
+pred_error <- hist(Simuls1$rt[Simuls1$cor==0],breaks=breaks,plot=F)
+lines(breaks[-1]-.125,pred_error$counts,col="darkred",lwd=2,lty=1)
+# Legend
+legend("topright",c("Empirical correct","Empirical incorrect","Model correct", "Model incorrect"),
+       lty=c(NA,NA,1,1),lwd=1.5*ratio,col=c(rgb(0,1,0,.5),rgb(1,0,0,.5),"darkgreen","darkred"),border=NA,
+       cex=cex.leg,bty="n",pch=c(15,15,NA,NA),pt.cex=2)
+dev.off()
+
+

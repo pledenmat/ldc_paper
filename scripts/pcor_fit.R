@@ -8,7 +8,7 @@ go_to("functions")
 # source("quantilefit_function_DDM.R")
 source("rw_createHM_driftsign.r")
 
-font <- "Times new roman"
+font <- "Arial"
 windowsFonts(A = windowsFont(font))
 
 #' Function to get the right font size in points
@@ -30,8 +30,6 @@ mu <- c(-mu,mu)
 # Simulation parameters
 dt <- .001; nsim <- 100; ev_bound <- .3; ev_window <- dt*10; upperRT <- 5
 timesteps <- upperRT/dt; ev_mapping <- seq(-ev_bound,ev_bound,by=ev_window)
-
-cexmain <- 2;cexax <- 1.5;cexlab <- 2
 
 # Generate the heatmap
 go_to("results")
@@ -147,7 +145,7 @@ fields::image.plot(1:dim(hm_ldc_up)[1],1:dim(hm_ldc_up)[2],hm_ldc_up,zlim=c(0,1)
                    col=colMap,ylab="",xlab='',legend.shrink=.5,
                    main=expression(paste(alpha," = 15.6; ",beta," = ",0)),
                    axes=F,cex.main=1,legend.cex=cex.leg,legend.mar = 2.5,
-                   legend.args = list(text="Confidence",side=3,line=.25,cex=cexlab),
+                   legend.args = list(text="Confidence",side=3,line=.25,cex=cexlab*.9),
                    axis.args=list(at=seq(0,1,.5),labels=seq(0,1,.5),cex.axis=cexax))
 mtext("Evidence",2,at=dim(hm_ldc_up)[2]/2,line=2,cex=cexlab);
 mtext("Time (s)",1,at=dim(hm_ldc_up)[1]/2,line=1,cex=cexlab)
