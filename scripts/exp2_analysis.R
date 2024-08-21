@@ -28,7 +28,7 @@ max_count <- function(data){
   return(max(table(data)))
 }
 
-error.bar <- function(x, y, upper, lower=upper, length=0.1,...){
+error.bar <- function(x, y, upper, lower=upper, length=0,...){
   if(length(x) != length(y) | length(y) !=length(lower) | length(lower) != length(upper))
     stop("vectors must be same length")
   arrows(x,y+upper, x, y-lower, angle=90, code=3, length=length, ...)
@@ -327,8 +327,6 @@ if (stat_tests) {
   merr <- lmer(cj ~ condition*difflevel + (condition|sub),data = subset(Data_alpha,cor==0)); 
   anova(mcor) #Results
   anova(merr) #Results
-  # mgamma <- glmer(cj ~ condition*difflevel*cor + (condition|sub),data = Data_alpha,family=Gamma(link="identity")); 
-  
   
   m.int <- lmer(cj ~ condition*cor*difflevel + (1|sub),data = Data_beta); 
   mcond <- lmer(cj ~ condition*cor*difflevel + (condition|sub),data = Data_beta,REML = F); 
@@ -917,7 +915,7 @@ if (!file.exists("conf_contrast.Rdata")) {
     # Simulation from model ---------------------------------------------------
     rm(Simuls_afix);rm(Simuls_bfix)
     if (file.exists(paste0("simuls/Simuls_afix_",rep,".csv"))) {
-      print(paste("Loading prediction n°",rep))
+      print(paste("Loading prediction n?",rep))
       Simuls_afix <- read.csv(paste0("simuls/Simuls_afix_",rep,".csv"))
       Simuls_bfix <- read.csv(paste0("simuls/Simuls_bfix_",rep,".csv"))
     }else{
@@ -1943,6 +1941,32 @@ legend("topright",c("Empirical data","Model predictions"),lty=c(1,NA),
        cex=cex.leg,bty="n")
 dev.off()
 
+## Correlations
+# Behavior
+correlation_a <- c()
+for (subj in unique(Data_alpha$sub)) {
+  correlation_a <- c(correlation_a,cor(Data_alpha[Data_alpha$sub==subj,]$cj,Data_alpha[Data_alpha$sub==subj,]$rt,method = "spearman"))
+}
+t.test(correlation_a)
+
+correlation_b <- c()
+for (subj in unique(Data_beta$sub)) {
+  correlation_b <- c(correlation_b,cor(Data_beta[Data_beta$sub==subj,]$cj,Data_beta[Data_beta$sub==subj,]$rt,method = "spearman"))
+}
+t.test(correlation_b)
+
+# Model predictions
+correlation_a_sim <- c()
+for (subj in unique(Simuls_bfix_alpha$sub)) {
+  correlation_a_sim <- c(correlation_a_sim,cor(Simuls_bfix_alpha[Simuls_bfix_alpha$sub==subj,]$cj,Simuls_bfix_alpha[Simuls_bfix_alpha$sub==subj,]$rt,method = "spearman"))
+}
+t.test(correlation_a_sim)
+
+correlation_b_sim <- c()
+for (subj in unique(Simuls_afix_beta$sub)) {
+  correlation_b_sim <- c(correlation_b_sim,cor(Simuls_afix_beta[Simuls_afix_beta$sub==subj,]$cj,Simuls_afix_beta[Simuls_afix_beta$sub==subj,]$rt,method = "spearman"))
+}
+t.test(correlation_b_sim)
 
 # Other Confidence ~ RT analysis ------------------------------------------
 par(mfrow=c(1,1), mar = c(5,4,4,2)+.1)

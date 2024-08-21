@@ -1,10 +1,22 @@
+#' @title Analysis of the data from experiment 1
+#' @author Pierre Le Denmat
+#' @date 2020-06-01
+#' @description Analysis of the data from experiment 1 in the context of the research article: 
+#' "A low-dimensional approximation of optimal confidence".
+#' @details The script is divided into several sections:
+#' - Preprocessing: The data is loaded and preprocessed.
+#' - Model fitting: Load the model fits performed on the cluster (or fit the model if not already done).
+#' - Simulation from the model: Simulate data from the best fitting parameters
+#' - Parameter analysis: Look at condition effect on the estimated parameters
+#' - Simulation analysis: Reproduce the behavioral analysis on simulated data
+#' - Plots: Generate the plots for the paper
+
+
 rm(list=ls())
 curdir <- dirname(rstudioapi::getSourceEditorContext()$path)
 setwd(curdir)
-library(myPackage)
-go_to("functions")
 library(Rcpp) 
-source('quantilefit_function_fullRTconf.R')
+source('../functions/quantilefit_function_fullRTconf.R')
 library(DEoptim)
 library(MALDIquant)
 library(reshape)
@@ -27,15 +39,12 @@ error.bar <- function(x, y, upper, lower=upper, length=0.1,...){
 
 # Preprocessing -----------------------------------------------------------
 
-go_to("data")
-go_to("exp1")
-
 N <- 50
 for(i in 1:N){
   if(i == 1){
-    Data1 <- read.csv(paste0('selfconfidence1A_sub',i,'.csv'),fileEncoding="UTF-8-BOM")
+    Data1 <- read.csv(paste0('../data/exp1/selfconfidence1A_sub',i,'.csv'),fileEncoding="UTF-8-BOM")
   }else{
-    temp <- read.csv(paste0('selfconfidence1A_sub',i,'.csv'),fileEncoding="UTF-8-BOM")
+    temp <- read.csv(paste0('../data/exp1/selfconfidence1A_sub',i,'.csv'),fileEncoding="UTF-8-BOM")
     Data1 <- rbind(Data1,temp)
   }
 }
@@ -82,16 +91,13 @@ Data1$response[Data1$response==0] <- -1
 
 Data1 <- Data1[,c("sub","task","selfconf","difflevel","rt","response","cor","cj","RTconf","block")]
 names(Data1) <- c("sub","task","selfconf","coh","rt","resp","cor","cj","RTconf","block")
-write.csv(df,"dataexp1_prior_belief.csv",row.names = FALSE)
+write.csv(df,"../data/dataexp1_prior_belief.csv",row.names = FALSE) # Export data to fit the model on the cluster
 
 condLab <- unique(Data1$selfconf); Ncond <- length(condLab) #Change column name according to condition label in dataset
 subs <- unique(Data1$sub);N<-length(subs)
 
 difficulty <- sort(unique(Data1$coh));
 # Fits Load ---------------------------------------------------------------
-go_to("fits")
-go_to("exp1")
-
 bound <- matrix(NA,N,Ncond);v <- matrix(NA,N,Ncond);ter <- matrix(NA,N,Ncond);conf_rt <- matrix(NA,N,Ncond);alpha <- matrix(NA,N,Ncond);beta <- matrix(NA,N,Ncond); resid <- matrix(NA,N,Ncond)
 v2 <- matrix(NA,N,Ncond);v3 <- matrix(NA,N,Ncond); #Adjust the number of drift parameters to the model loaded
 vratio <- matrix(NA,N,Ncond)
@@ -99,7 +105,7 @@ vratio <- matrix(NA,N,Ncond)
 for(i in 1:N){
   for(c in 1:Ncond){
     print(paste('Running participant',i,'from',N,"condition",c))
-    load(paste0('results_sub_',subs[i],'_',condLab[c],'.Rdata'))
+    load(paste0('../fits/exp1/results_sub_',subs[i],'_',condLab[c],'.Rdata'))
     bound[i,c] <- results$optim$bestmem[1]
     ter[i,c] <- results$optim$bestmem[2]
     vratio[i,c] <- results$optim$bestmem[7]
@@ -233,21 +239,22 @@ if (stat_test) {
   Anova(m.cond)
 }
 # Plot Layout -------------------------------------------------------------
-go_to("plots")
+setwd("../plots")
 cex_size <- function(size,cex.layout) {
   return(size/(par()$ps*cex.layout))
 }
-cex.layout <- .83 
-ratio <- .66/.83 # To get comparable sizes with figure 4
-cex.lab <- cex_size(10,cex.layout)*cex.layout # Set with mtext so ignore mfrow
+cex.layout <- .66 
+ratio <- .66/cex.layout # To get comparable sizes with figure 4
+cex.lab <- cex_size(10,cex.layout) 
+cex.lab.mtext <- cex.lab*cex.layout # Set with mtext so ignore mfrow
 cex.ax <- cex_size(8,cex.layout)
 cex.leg <- cex_size(8,cex.layout)
 cex.datdot <- cex_size(8,cex.layout);
 ylab_orientation <- 1 # 1 for horizontal, 0 for vertical
 lwd.dat <- 1.5*ratio
-mar.rt <- c(1,4,2,0)+.1
+mar.rt <- c(1,4,0,0)+.1
 mar.acc <- c(5,4,0,0)+.1
-mar.cj <- c(5,4,2,2)+.1
+mar.cj <- c(5,4,0,2)+.1
 col_minus <- rgb(205,51,51,maxColorValue = 255)
 col_minus_shade <- rgb(205,51,51,51,maxColorValue = 255)
 col_baseline <- rgb(0,139,139,maxColorValue = 255)
@@ -258,9 +265,12 @@ tiff(file = "exp1_results.tif",width = 13,height=8,units="cm",compression="lzw",
 font <- "Arial"
 windowsFonts(A = windowsFont(font))
 par(family="A")
-layout(matrix(c(1,2,3,3),ncol=2),widths = c(1,2))
+layout(matrix(c(1,2,3,1,4,4),ncol=2),widths = c(1,2),heights = c(.1,.4,.4))
 par(mar=c(0,0,0,0))
-par(mar=c(5,4,4,2)+.1)
+plot.new()
+legend("top",legend=c("Positive","Average","Negative"),lty=1,bty = "n",horiz=T,
+       title = "Fake Feedback condition",pch=rep(16,3),inset=.1, cex = cex.leg,
+       col=c("darkgoldenrod3","cyan4","brown3"),y.intersp = .9)
 
 # RT ----------------------------------------------------------------------
 
@@ -300,18 +310,18 @@ xhigh_sim <- xhigh_sim[,c("hard","average","easy")]
 
 stripchart(x, ylim=c(.6,1.1), xlim=c(-.05,n-1), vertical = TRUE, col="white",frame=F,xaxt='n',
            main="",cex.axis=cex.ax,family="A",las=ylab_orientation)
-mtext("Response time (s)",2,at=.85,line=3,cex=cex.lab,family="A");
+mtext("Response time (s)",2,at=.85,line=3,cex=cex.lab.mtext,family="A");
 axis(1,at=0:(n-1),labels=c("","",""), cex.axis=cex.ax);
 # Empirical data
 means <- sapply(x, mean);n<- length(x)
 lines(0:(n-1),means,type='b',pch=16,cex=cex.datdot,col="brown3",lwd=lwd.dat)
-error.bar(0:(n-1),means,colSds(as.matrix(x),na.rm=T)/sqrt(N),lwd=lwd.dat,length=.05,col="brown3")
+error.bar(0:(n-1),means,colSds(as.matrix(x),na.rm=T)/sqrt(N),lwd=lwd.dat,length=0,col="brown3")
 means <- sapply(xmed, mean,na.rm=T)
 lines(0:(n-1),means,type='b',pch=16,cex=cex.datdot,col="cyan4",lwd=lwd.dat)
-error.bar(0:(n-1),means,colSds(as.matrix(xmed),na.rm=T)/sqrt(N),lwd=lwd.dat,length=.05,col="cyan4")
+error.bar(0:(n-1),means,colSds(as.matrix(xmed),na.rm=T)/sqrt(N),lwd=lwd.dat,length=0,col="cyan4")
 means <- sapply(xhigh, mean,na.rm=T)
 lines(0:(n-1),means,type='b',pch=16,cex=cex.datdot,col="darkgoldenrod3",lwd=lwd.dat)
-error.bar(0:(n-1),means,colSds(as.matrix(xhigh),na.rm=T)/sqrt(N),lwd=lwd.dat,length=.05,col="darkgoldenrod3")
+error.bar(0:(n-1),means,colSds(as.matrix(xhigh),na.rm=T)/sqrt(N),lwd=lwd.dat,length=0,col="darkgoldenrod3")
 #Model predictions
 polygon(c(0:(n-1),(n-1):0),c(colMeans(x_sim,na.rm=T) + (colSds(as.matrix(x_sim))/sqrt(N)),(colMeans(x_sim,na.rm=T) - colSds(as.matrix(x_sim))/sqrt(N))[3:1]),
         border=F,col=rgb(205,51,51,51,maxColorValue = 255))
@@ -359,9 +369,9 @@ xhigh_sim <- xhigh_sim[,c("hard","average","easy")]
 # Start plotting
 stripchart(x, ylim=c(.6,1), xlim=c(-.05,n-1), vertical = TRUE, col="white",frame=F,xaxt='n',
            main="",cex.axis=cex.ax,las=ylab_orientation)
-mtext("Accuracy",2,at=.8,line=3,cex=cex.lab,family="A");
+mtext("Accuracy",2,at=.8,line=3,cex=cex.lab.mtext,family="A");
 axis(1,at=0:(n-1),labels=c("Hard","Average","Easy"), cex.axis=cex.ax,family="A");
-mtext("Trial difficulty",1,3,at=1,cex=cex.lab,family="A")
+mtext("Trial difficulty",1,3,at=1,cex=cex.lab.mtext,family="A")
 # Model predictions
 polygon(c(0:(n-1),(n-1):0),c(colMeans(x_sim,na.rm=T) + (colSds(as.matrix(x_sim))/sqrt(N)),(colMeans(x_sim,na.rm=T) - colSds(as.matrix(x_sim))/sqrt(N))[3:1]),
         border=F,col=rgb(205,51,51,51,maxColorValue = 255))
@@ -372,13 +382,13 @@ polygon(c(0:(n-1),(n-1):0),c(colMeans(xhigh_sim,na.rm=T) + (colSds(as.matrix(xhi
 # Empirical data
 means <- sapply(x, mean);n<- length(x)
 lines(0:(n-1),means,type='b',pch=16,cex=cex.datdot,col="brown3",lwd=lwd.dat)
-error.bar(0:(n-1),means,colSds(as.matrix(x),na.rm=T)/sqrt(N),lwd=lwd.dat,length=.05,col="brown3")
+error.bar(0:(n-1),means,colSds(as.matrix(x),na.rm=T)/sqrt(N),lwd=lwd.dat,length=0,col="brown3")
 means <- sapply(xmed, mean,na.rm=T)
 lines(0:(n-1),means,type='b',pch=16,cex=cex.datdot,col="cyan4",lwd=lwd.dat)
-error.bar(0:(n-1),means,colSds(as.matrix(xmed),na.rm=T)/sqrt(N),lwd=lwd.dat,length=.05,col="cyan4")
+error.bar(0:(n-1),means,colSds(as.matrix(xmed),na.rm=T)/sqrt(N),lwd=lwd.dat,length=0,col="cyan4")
 means <- sapply(xhigh, mean,na.rm=T)
 lines(0:(n-1),means,type='b',pch=16,cex=cex.datdot,col="darkgoldenrod3",lwd=lwd.dat)
-error.bar(0:(n-1),means,colSds(as.matrix(xhigh),na.rm=T)/sqrt(N),lwd=lwd.dat,length=.05,col="darkgoldenrod3")
+error.bar(0:(n-1),means,colSds(as.matrix(xhigh),na.rm=T)/sqrt(N),lwd=lwd.dat,length=0,col="darkgoldenrod3")
 # CJ ----------------------------------------------------------------------
 
 par(mar=mar.cj)
@@ -432,11 +442,11 @@ xsim_err <- xsim_err[,c("hard","average","easy")];
 xsimmed_err <- xsimmed_err[,c("hard","average","easy")];
 xsimhigh_err <- xsimhigh_err[,c("hard","average","easy")]
 
-stripchart(xminus_cor,ylim=c(2.5,6), xlim=c(-.05,n-1), vertical = TRUE, col="white",frame=F,xaxt='n',
+stripchart(xminus_cor,ylim=c(2.5,5.7), xlim=c(-.05,n-1), vertical = TRUE, col="white",frame=F,xaxt='n',
            yaxt = 'n',xlab="",ylab = "",
            main = NULL,family="A")
 axis(1,at=0:(n-1),labels=c("Hard","Average","Easy"), cex.axis=cex.ax,family="A");
-axis(2, seq(2.5,6,.5), cex.axis=cex.ax,las=ylab_orientation,family="A")
+axis(2, seq(2.5,5.5,.5), cex.axis=cex.ax,las=ylab_orientation,family="A")
 title(ylab = "Confidence", xlab= "Trial difficulty",line = 2.5,cex.lab=cex.lab)
 polygon(c(0:(n-1),(n-1):0),
         c(colMeans(xsim_cor,na.rm=T) + (colSds(as.matrix(xsim_cor))/sqrt(N)),
@@ -464,30 +474,31 @@ polygon(c(0:(n-1),(n-1):0),
         border=F,col=col_plus_shade)
 means <- sapply(xminus_cor, mean)
 lines(0:(n-1),means,type='b',pch=16,cex=cex.datdot,col=col_minus,lwd=lwd.dat,lty = "dashed")
-error.bar(0:(n-1),means,colSds(as.matrix(xminus_cor),na.rm=T)/sqrt(N),lwd=lwd.dat,col=col_minus)
+error.bar(0:(n-1),means,colSds(as.matrix(xminus_cor),na.rm=T)/sqrt(N),lwd=lwd.dat,col=col_minus,length=0)
 means <- sapply(xbaseline_cor, mean,na.rm=T)
 lines(0:(n-1),means,type='b',pch=16,cex=cex.datdot,col=col_baseline,lwd=lwd.dat,lty = "dashed")
-error.bar(0:(n-1),means,colSds(as.matrix(xbaseline_cor),na.rm=T)/sqrt(N),lwd=lwd.dat,col=col_baseline)
+error.bar(0:(n-1),means,colSds(as.matrix(xbaseline_cor),na.rm=T)/sqrt(N),lwd=lwd.dat,col=col_baseline,length=0)
 means <- sapply(xplus_cor, mean,na.rm=T)
 lines(0:(n-1),means,type='b',pch=16,cex=cex.datdot,col=col_plus,lwd=lwd.dat,lty = "dashed")
-error.bar(0:(n-1),means,colSds(as.matrix(xplus_cor),na.rm=T)/sqrt(N),lwd=lwd.dat,col=col_plus)
+error.bar(0:(n-1),means,colSds(as.matrix(xplus_cor),na.rm=T)/sqrt(N),lwd=lwd.dat,col=col_plus,length=0)
 
 means <- sapply(xminus_err, mean, na.rm=T)
 lines(0:(n-1),means,type='b',pch=16,cex=cex.datdot,col=col_minus,lwd=lwd.dat,lty = "dotted")
-error.bar(0:(n-1),means,colSds(as.matrix(xminus_err),na.rm=T)/sqrt(N),lwd=lwd.dat,col=col_minus)
+error.bar(0:(n-1),means,colSds(as.matrix(xminus_err),na.rm=T)/sqrt(N),lwd=lwd.dat,col=col_minus,length=0)
 means <- sapply(xbaseline_err, mean,na.rm=T)
 lines(0:(n-1),means,type='b',pch=16,cex=cex.datdot,col=col_baseline,lwd=lwd.dat,lty = "dotted")
-error.bar(0:(n-1),means,colSds(as.matrix(xbaseline_err),na.rm=T)/sqrt(N),lwd=lwd.dat,col=col_baseline)
+error.bar(0:(n-1),means,colSds(as.matrix(xbaseline_err),na.rm=T)/sqrt(N),lwd=lwd.dat,col=col_baseline,length=0)
 means <- sapply(xplus_err, mean,na.rm=T)
 lines(0:(n-1),means,type='b',pch=16,cex=cex.datdot,col=col_plus,lwd=lwd.dat,lty = "dotted")
-error.bar(0:(n-1),means,colSds(as.matrix(xplus_err),na.rm=T)/sqrt(N),lwd=lwd.dat,col=col_plus)
-legend(-.1,6.2,legend=c("Positive","Average","Negative"),lty=1,bty = "n",horiz=T,
-       title = "Fake Feedback condition",pch=rep(16,3),inset=.1, cex = cex.leg,
-       col=c("darkgoldenrod3","cyan4","brown3"),y.intersp = .9)
+error.bar(0:(n-1),means,colSds(as.matrix(xplus_err),na.rm=T)/sqrt(N),lwd=lwd.dat,col=col_plus,length=0)
 legend("bottomleft",legend=c("Correct trials","Error trials"),
        title = NULL,lty=c("dashed","dotted"),bty = "n",inset=0,
        cex=cex.leg,lwd=lwd.dat,seg.len=1.5)
+legend("topleft",legend=c("Empirical data","Model prediction"),
+       title = "",bty = "n",inset=0,lty=c(1,NA),pch=c(16,15),pt.cex=c(1,2),
+       cex=cex.leg,lwd=lwd.dat,seg.len=1.5,col="lightgrey")
 dev.off()
+
 # Plot estimated parameters -------------------------------------------------------------------
 go_to("plots")
 jpeg(filename = "estimated_par_exp1.tif",
@@ -717,6 +728,21 @@ legend("topright",c("Empirical data","Model predictions"),lty=c(1,NA),
        lwd=1.5*ratio,col=c("black",rgb(0,0,0,.5)),border=NA,pch=c(16,15),pt.cex=c(1,2),
        cex=cex.leg,bty="n")
 dev.off()
+
+## Correlation between confidence and RT
+# Behavior
+correlation_data <- c()
+for (subj in unique(Data1$sub)) {
+  correlation_data <- c(correlation_data,cor(Data1[Data1$sub==subj,]$cj,Data1[Data1$sub==subj,]$rt,method = "spearman"))
+}
+t.test(correlation_data)
+
+# Model predictions
+correlation_sim <- c()
+for (subj in unique(Simuls1$sub)) {
+  correlation_sim <- c(correlation_sim,cor(Simuls1[Simuls1$sub==subj,]$cj,Simuls1[Simuls1$sub==subj,]$rt,method = "spearman"))
+}
+t.test(correlation_sim)
 
 # Confidence ~ RT (with accuracy) -----------------------------------------
 par(mfrow=c(1,1), mar = c(5,4,4,2)+.1)
