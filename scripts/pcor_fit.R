@@ -1,12 +1,25 @@
+#' @title Simulation
+#' @author Pierre Le Denmat
+#' @description Model simulations to show that the LDC model approximates p(cor|e,t,x) 
+#' @details The script is divided into several sections:
+#' - Reference heatmap generation: the p(cor) heatmap is generated from a uniform 
+#' distribution of drift rates
+#' - Reference heatmap plot: Reference heatmap of figure 1
+#' - Model fitting: Fit the LDC model to the true p(cor) of simulated data 
+#' - Plot resulting heatmap from the model: Model heatmap of figure 1
+#' - Plot signatures of confidence: Plot the 4 signatures represented in Figure 1
+
+rm(list=ls())
 curdir <- dirname(rstudioapi::getSourceEditorContext()$path)
 setwd(curdir)
 
-library(myPackage)
+library(myPackage) # Run devtools::install_github("pledenmat/myPackage") to install this custom package
 library(reshape)
 library(timeSeries)
-go_to("functions")
+setwd("../functions")
 # source("quantilefit_function_DDM.R")
 source("rw_createHM_driftsign.r")
+setwd("../scripts")
 
 font <- "Arial"
 windowsFonts(A = windowsFont(font))
@@ -20,6 +33,9 @@ cexlab <- cex_size(10,cex.layout)*cex.layout
 cexax <- cex_size(8,cex.layout)
 cex.leg <- cex_size(8,cex.layout)
 
+
+# Generate reference heatmap ----------------------------------------------
+
 # We consider uniformly distributed drift rates for the reference heatmap
 Ndrift <- 1000
 v_max <- .2
@@ -32,8 +48,7 @@ dt <- .001; nsim <- 100; ev_bound <- .3; ev_window <- dt*10; upperRT <- 5
 timesteps <- upperRT/dt; ev_mapping <- seq(-ev_bound,ev_bound,by=ev_window)
 
 # Generate the heatmap
-go_to("results")
-filename <- "hm_ref_unif.Rdata"
+filename <- "../results/hm_ref_unif.Rdata"
 if (file.exists(filename)) {
   load(filename)
 }else{
@@ -45,8 +60,8 @@ hm_low <- output$lower; hm_up <- output$upper
 hmvec_low <- as.vector(hm_low); hmvec_up <- as.vector(hm_up)
 
 colMap <- viridis::viridis(length(hm_up))
-go_to("plots")
-# Plot reference HM
+# Plot reference HM -------------------------------------------------------
+setwd("../plots")
 par(mar=c(3,4,1.5,2))
 jpeg(filename = "pcor_hm_axis.jpeg",
      width = 8,
@@ -58,7 +73,7 @@ par(family="A")
 fields::image.plot(1:dim(hm_up)[1],1:dim(hm_up)[2],hm_up,zlim=c(0,1),
                    col=colMap,ylab="",xlab='',legend.shrink=.5,
                    main=paste(""),legend.cex=cex.leg,
-                   axes=F,cex.main=cexmain,legend.mar=2.5,
+                   axes=F,legend.mar=2.5,
                    legend.args = list(text=expression(paste(italic("P"),"(correct)")),cex=cexlab,side = 3,line=.25),
                    axis.args=list(at=seq(0,1,.5),labels=seq(0,1,.5),cex.axis=cexax))
 mtext("Evidence",2,at=dim(hm_up)[2]/2,line=2,cex=cexlab);
@@ -67,6 +82,9 @@ axis(1, at = c(1,dim(hm_up)[1]), labels = c(0,5),cex.axis=cexax)
 axis(2, at = c(1,dim(hm_up)[2]/2,dim(hm_up)[2]), labels = c(-ev_bound,0,ev_bound),cex.axis=cexax)
 dev.off()
 par(mar=c(5,4,4,2)+.1)
+
+
+# Fit LDC model to the reference heatmap ----------------------------------
 
 # Generate some data from typical DDM parameters
 nsub <- 100
@@ -117,6 +135,10 @@ beta <- coef(fit)["b"]
 simdat$cj_model <- LDC(alpha,beta,simdat)
 
 cor.test(simdat$cj,simdat$cj_model,method = "spearman")
+
+
+# Now plot the model heatmap ----------------------------------------------
+
 
 # Draw heatmap from best-fitting LDC parameters and then plot it
 hm_ldc <- matrix(NA,nrow=timesteps,ncol=length(ev_mapping))
@@ -176,7 +198,6 @@ Ndiff <- length(v)
 simdat$cj_bin <- as.numeric(cut(simdat$cj,breaks = seq(0,1,1/Nbin),labels=1:Nbin))/Nbin
 Simuls1 <- simdat
 Simuls1$cj_bin <- as.numeric(cut(Simuls1$cj_model,breaks = seq(0,1,1/Nbin),labels=1:Nbin))/Nbin
-go_to("plots")
 jpeg(filename = "signatures_4.jpeg",
      width = 16,
      height = 16,

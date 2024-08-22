@@ -1,6 +1,5 @@
 #' @title Analysis of the data from experiment 1
 #' @author Pierre Le Denmat
-#' @date 2020-06-01
 #' @description Analysis of the data from experiment 1 in the context of the research article: 
 #' "A low-dimensional approximation of optimal confidence".
 #' @details The script is divided into several sections:
@@ -27,6 +26,7 @@ library(fields)
 library(prob)
 library(car)
 library(multcomp)
+library(effectsize)
 setwd(curdir)
 
 stat_test <- F
@@ -173,7 +173,7 @@ if (stat_test) {
   post.hoc <- glht(m, linfct = mcp(condition = 'Tukey'))
   summary(post.hoc)
   
-  library(effectsize)##Non-decision time
+##Non-decision time
   m <- lmer(ter ~ condition + (1 |sub),data=param_1)
   anova(m)
   
@@ -188,9 +188,6 @@ if (stat_test) {
   anova(m)
   post.hoc <- glht(m, linfct = mcp(condition = 'Tukey'))
   summary(post.hoc)
-  ##V-ratio
-  m <- lmer(vratio ~ condition + (1 |sub),data=param_1)
-  anova(m)
 }
 # Behavior analysis of prediction -------------------------------------------------
 if (stat_test) {
@@ -500,7 +497,6 @@ legend("topleft",legend=c("Empirical data","Model prediction"),
 dev.off()
 
 # Plot estimated parameters -------------------------------------------------------------------
-go_to("plots")
 jpeg(filename = "estimated_par_exp1.tif",
      width = 19,
      height = 14,
@@ -647,8 +643,6 @@ ylab_orientation <- 1 # 1 for horizontal, 0 for vertical
 fb_par_col <- 'black'
 fb_par_pch <- 4
 
-go_to("plots")
-
 N_temp <- length(unique(Data1$sub))
 
 
@@ -704,8 +698,7 @@ na_count_sim <- sapply(test_sim, function(y) sum(length(which(!is.na(y)))))
 
 cex.datdot <- 1
 
-go_to("plots")
-tiff("cj_rt_dist_exp1.tiff",width=8,height=8,units="cm",res=600,compression="lzw")
+tiff("cj_rt_exp1.tiff",width=8,height=8,units="cm",res=600,compression="lzw")
 par(mar=mar.plot)
 
 stripchart(test,vertical = TRUE, col="white",frame=F,xaxt='n',
@@ -743,112 +736,4 @@ for (subj in unique(Simuls1$sub)) {
   correlation_sim <- c(correlation_sim,cor(Simuls1[Simuls1$sub==subj,]$cj,Simuls1[Simuls1$sub==subj,]$rt,method = "spearman"))
 }
 t.test(correlation_sim)
-
-# Confidence ~ RT (with accuracy) -----------------------------------------
-par(mfrow=c(1,1), mar = c(5,4,4,2)+.1)
-cex_size <- function(size,cex.layout) {
-  return(size/(par()$ps*cex.layout))
-}
-cex.layout <- .83 
-ratio <- .66/cex.layout # To get comparable sizes with figure 4
-cex.lab <- cex_size(10,cex.layout)*cex.layout # Set with mtext so ignore mfrow
-cex.ax <- cex_size(8,cex.layout)
-cex.leg <- cex_size(8,cex.layout)
-cex.datdot <- cex_size(8,cex.layout);
-lwd.dat <- 1.5*ratio
-mar.plot <- c(4,4,0,1)+.1
-
-Data1$rt_bin <- cut(Data1$rt,breaks=c(seq(0,2,.5),max(Data1$rt)))
-test <- with(Data1,aggregate(cj,by=list(sub,cor,rt_bin),mean))
-names(test) <- c("sub","cor","rt_bin","cj")
-test <- cast(test,sub+cor~rt_bin)
-test_cor <- test[test$cor==1,c(-1,-2)]
-test_err <- test[test$cor==0,c(-1,-2)]
-
-
-Simuls1$rt_bin <- cut(Simuls1$rt,breaks=c(seq(0,2,.5),max(Simuls1$rt)))
-test_sim <- with(Simuls1,aggregate(cj,by=list(sub,cor,rt_bin),mean))
-names(test_sim) <- c("sub","cor","rt_bin","cj")
-test_sim <- cast(test_sim,sub+cor~rt_bin)
-test_sim_cor <- test_sim[test_sim$cor==1,c(-1,-2)]
-test_sim_err <- test_sim[test_sim$cor==0,c(-1,-2)]
-
-
-n <- length(test_cor)
-
-na_count_dat_cor <- sapply(test_cor, function(y) sum(length(which(!is.na(y)))))
-na_count_dat_err <- sapply(test_err, function(y) sum(length(which(!is.na(y)))))
-na_count_sim_cor <- sapply(test_sim_cor, function(y) sum(length(which(!is.na(y)))))
-na_count_sim_err <- sapply(test_sim_err, function(y) sum(length(which(!is.na(y)))))
-
-# Adapt dot size to number of trials
-max.cex.datdot <- 2
-bin_freq <- table(Data1$rt_bin)/nrow(Data1)
-cex.datdot <- bin_freq[as.character(names(test))] * max.cex.datdot/max(bin_freq)
-cex.datdot <- 1
-
-go_to("plots")
-tiff("cj_rt_dist_exp1.tiff",width=16,height=8,units="cm",res=600,compression="lzw")
-layout(matrix(c(1,2,1,3),ncol=2),heights=c(.1,1))
-par(mar=c(0,0,0,0))
-plot.new()
-title(main="Experiment 1",cex.main=cex.lab,line=-1)
-par(mar=mar.plot)
-
-stripchart(test_cor,vertical = TRUE, col="white",frame=F,xaxt='n',
-           ylim=c(3,6), xlim=c(-.05,n-1),
-           yaxt = 'n',xlab="",ylab = "",
-           main = "")
-mtext("Confidence",2,at=4.5,line=2.5,cex=cex.lab);
-mtext("RT bin (s)",1,at=n/2,line=2.5,cex=cex.lab);
-axis(1,at=0:(n-1),labels=c(names(test_cor)[-5],expression(paste("(2,",infinity,"]"))), cex.axis=cex.ax);
-axis(2, seq(3,6,.5), cex.axis=cex.ax, las = 2)
-# Correct
-means <- sapply(test_cor, mean, na.rm = T)
-lines(0:(n-1),means,type='b',pch=16,cex=cex.datdot,lwd=lwd.dat,lty=1)
-error.bar(0:(n-1),means,colSds(as.matrix(test_cor),na.rm=T)/sqrt(na_count_dat_cor),lwd=lwd.dat)
-# Error
-means <- sapply(test_err, mean, na.rm = T)
-lines(0:(n-1),means,type='b',pch=16,cex=cex.datdot,lwd=lwd.dat,lty=2)
-error.bar(0:(n-1),means,colSds(as.matrix(test_err),na.rm=T)/sqrt(na_count_dat_err),lwd=lwd.dat)
-polygon(c(0:(n-1),(n-1):0),
-        c(colMeans(test_sim_cor,na.rm=T) + (colSds(as.matrix(test_sim_cor),na.rm=T)/sqrt(na_count_sim_cor)),
-          (colMeans(test_sim_cor,na.rm=T) - colSds(as.matrix(test_sim_cor),na.rm=T)/sqrt(na_count_sim_cor))[n:1]),
-        border=F,col = rgb(0,0,0,.5))
-polygon(c(0:(n-1),(n-1):0),
-        c(colMeans(test_sim_err,na.rm=T) + (colSds(as.matrix(test_sim_err),na.rm=T)/sqrt(na_count_sim_err)),
-          (colMeans(test_sim_err,na.rm=T) - colSds(as.matrix(test_sim_err),na.rm=T)/sqrt(na_count_sim_err))[n:1]),
-        border=F,col = rgb(0,0,0,.5))
-# Add trial accuracy as a legend
-legend("topright",c("Empirical correct","Empirical incorrect","Model predictions"),lty=c(1,2,NA),
-       lwd=1.5*ratio,col=c("black","black",rgb(0,0,0,.5)),border=NA,pch=c(NA,NA,15),pt.cex=2,
-       cex=cex.leg,bty="n")
-# dev.off()
-
-# Let's plot the distribution of RT for corrects and errors
-go_to("plots")
-
-breaks <- seq(0,4,.25)
-Simuls1 <- subset(Simuls1,rt<4)
-# tiff("rt_dist_exp1.tiff",width=8,height=8,units="cm",res=600,compression="lzw")
-
-par(mar=mar.plot)
-
-dist_plot <- hist(Data1$rt[Data1$cor==1],breaks=breaks,col=rgb(0,1,0,.5),border=NA,main="",
-                  xlab="",ylab="",cex.lab=cex.lab,cex.axis=cex.ax,xaxt='n')
-axis(1,at=seq(0,4,.5),labels=seq(0,4,.5),cex.axis=cex.ax)
-mtext("Number of trials",2,at=max(dist_plot$counts)/2,line=2.5,cex=cex.lab);
-mtext("RT (s)",1,at=2,line=2.5,cex=cex.lab);
-hist(Data1$rt[Data1$cor==0],breaks=breaks,col=rgb(1,0,0,.5),border=NA,add=T)
-# Add model predictions as lines
-pred_correct <- hist(Simuls1$rt[Simuls1$cor==1],breaks=breaks,plot=F)
-lines(breaks[-1]-.125,pred_correct$counts,col="darkgreen",lwd=2,lty=1)
-pred_error <- hist(Simuls1$rt[Simuls1$cor==0],breaks=breaks,plot=F)
-lines(breaks[-1]-.125,pred_error$counts,col="darkred",lwd=2,lty=1)
-# Legend
-legend("topright",c("Empirical correct","Empirical incorrect","Model correct", "Model incorrect"),
-       lty=c(NA,NA,1,1),lwd=1.5*ratio,col=c(rgb(0,1,0,.5),rgb(1,0,0,.5),"darkgreen","darkred"),border=NA,
-       cex=cex.leg,bty="n",pch=c(15,15,NA,NA),pt.cex=2)
-dev.off()
-
 

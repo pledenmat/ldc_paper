@@ -1,8 +1,22 @@
+#' @title Analysis of the data from experiment 2A/B
+#' @author Pierre Le Denmat
+#' @description Analysis of the data from experiment 2 in the context of the research article: 
+#' "A low-dimensional approximation of optimal confidence".
+#' @details The script is divided into several sections:
+#' - Preprocessing: The data is loaded and preprocessed.
+#' - Behaviour analysis: The behavioural data is analyzed using (generalized) linear mixed models.
+#' - Model fitting: Load the model fits performed on the cluster (or fit the model if not already done).
+#' - Simulation from the model: Simulate data from the best fitting parameters
+#' - Model comparison: Compare the models using BIC + group-level Bayesian model selection
+#' - Confidence contrast: Look at the prediction of each model on the confidence contrast
+#' - Plots: Generate the plots for the paper
+#' - Parameter analysis: Look at condition effect on the estimated parameters
+#' - Simulation analysis: Reproduce the behavioral analysis on simulated data
+
 rm(list=ls())
 curdir <- dirname(rstudioapi::getSourceEditorContext()$path)
 setwd(curdir)
 library(myPackage) # Run devtools::install_github("pledenmat/myPackage") to install this custom package
-go_to("functions")
 library(Rcpp)
 library(numDeriv) #Hessian
 library(reshape)
@@ -14,10 +28,12 @@ library(timeSeries) #ColSdS
 library(ggplot2)
 library(MALDIquant)
 library(DEoptim)
+setwd("../functions")
 source("quantilefit_function_AB.R")
 source("quantilefit_function_DDM.R")
-source("chi_square_optim_hessian.R")
+# source("chi_square_optim_hessian.R")
 source("build_hm.R")
+setwd("../scripts")
 
 plots <- F
 stat_tests <- F
@@ -37,17 +53,16 @@ error.bar <- function(x, y, upper, lower=upper, length=0,...){
 ##First subjects
 N <- 50; 
 session1_alpha <- 5; session1_beta <- 4 #Data file was different for first participants
-go_to("data")
-go_to("exp2a")
+
 ##Raw data load
 first = T
 for(i in 1:session1_alpha){
-  if (file.exists(paste0('fbmod_alpha_sub',i,'.csv'))) {
+  if (file.exists(paste0('../data/exp2a/fbmod_alpha_sub',i,'.csv'))) {
     if (first) {
-      Data_alpha <- read.csv(paste0('fbmod_alpha_sub',i,'.csv'))
+      Data_alpha <- read.csv(paste0('../data/exp2a/fbmod_alpha_sub',i,'.csv'))
       first = F
     }else{
-      temp <- read.csv(paste0('fbmod_alpha_sub',i,'.csv'))
+      temp <- read.csv(paste0('../data/exp2a/fbmod_alpha_sub',i,'.csv'))
       Data_alpha <- rbind(Data_alpha,temp)
       
     }
@@ -81,11 +96,11 @@ Data_alpha$manip <- 'alpha'
 
 for(i in (session1_alpha+1):N){
   if (i %in% c(6,7)) {
-    temp <- read.csv(paste0('fbmod_alpha_sub',i,'.csv'))
+    temp <- read.csv(paste0('../data/exp2a/fbmod_alpha_sub',i,'.csv'))
     Data_alpha <- rbind(Data_alpha,temp)
   }
-  else if (file.exists(paste0('fbmod_alpha_sub',i,'.csv'))) {
-    temp <- read.csv(paste0('fbmod_alpha_sub',i,'.csv'))
+  else if (file.exists(paste0('../data/exp2a/fbmod_alpha_sub',i,'.csv'))) {
+    temp <- read.csv(paste0('../data/exp2a/fbmod_alpha_sub',i,'.csv'))
     temp <- temp[ , -which(names(temp) %in% c("questionID","questionResp"))] #Remove questionnaire for now
     temp <- temp[temp$task != "",]
     Data_alpha <- rbind(Data_alpha,temp)
@@ -145,16 +160,16 @@ Data_alpha$sub <- as.factor(Data_alpha$sub)
 
 
 # Experiment 2B preprocessing ------------------------------------------------
-go_to("exp2b")
+
 ##Raw data load
 first = T
 for(i in 1:session1_beta){
-  if (file.exists(paste0('fbmod_beta_sub',i,'.csv'))) {
+  if (file.exists(paste0('../data/exp2b/fbmod_beta_sub',i,'.csv'))) {
     if (first) {
-      Data_beta <- read.csv(paste0('fbmod_beta_sub',i,'.csv'))
+      Data_beta <- read.csv(paste0('../data/exp2b/fbmod_beta_sub',i,'.csv'))
       first = F
     }else{
-      temp <- read.csv(paste0('fbmod_beta_sub',i,'.csv'))
+      temp <- read.csv(paste0('../data/exp2b/fbmod_beta_sub',i,'.csv'))
       Data_beta <- rbind(Data_beta,temp)
     }
   }
@@ -186,8 +201,8 @@ Data_beta$condition <- condition
 Data_beta$manip <- 'beta'
 
 for(i in (session1_beta+1):N){
-  if (file.exists(paste0('fbmod_beta_sub',i,'.csv'))) {
-    temp <- read.csv(paste0('fbmod_beta_sub',i,'.csv'))
+  if (file.exists(paste0('../data/exp2b/fbmod_beta_sub',i,'.csv'))) {
+    temp <- read.csv(paste0('../data/exp2b/fbmod_beta_sub',i,'.csv'))
     temp <- temp[ , -which(names(temp) %in% c("questionID","questionResp"))] #Remove questionnaire for now
     temp <- temp[temp$task != "",]
     Data_beta <- rbind(Data_beta,temp)
@@ -278,118 +293,104 @@ Ndiff <- length(difficulty)
 
 # Behaviour analysis --------------------------------------------------------------
 if (stat_tests) {
+  control <- lmerControl(optimize="bobyqa")
+  glmercontrol <- glmerControl(optimizer="bobyqa")
   ### RT
-  m.int <- lmer(rt~condition*difflevel + (1|sub),data=Data_alpha) #Random intercept model
-  m <- lmer(rt~condition*difflevel + (condition|sub),data=Data_alpha,REML = F)
-  anova(m.int,m) #Test the added value of the random slope
-  m.diff <- lmer(rt~condition*difflevel + (1+difflevel|sub),data=Data_alpha,REML = F,control=lmerControl(optimize="bobyqa"))
-  plot(resid(m),Data_alpha$rt) #Linearity
-  leveneTest(residuals(m) ~ Data_alpha$condition) #Homogeneity of variance
-  qqmath(m) #Normality
-  anova(m) #Results
+  m.int <- lmer(rt~condition*difflevel + (1|sub),data=Data_alpha,control=control) #Random intercept model
+  m.cond <- lmer(rt~condition*difflevel + (condition|sub),data=Data_alpha,REML = F,control=control)
+  anova(m.int,m.cond) #Test the added value of the random slope
+  m.diff <- lmer(rt~condition*difflevel + (1+difflevel|sub),data=Data_alpha,REML = F,control=control)
+  plot(resid(m.cond),Data_alpha$rt) #Linearity
+  leveneTest(residuals(m.cond) ~ Data_alpha$condition) #Homogeneity of variance
+  qqmath(m.cond) #Normality
+  anova(m.cond) #Results
   
-  m.int <- lmer(rt~condition*difflevel + (1|sub),data=Data_beta) #Random intercept model
-  m <- lmer(rt~condition*difflevel + (condition|sub),data=Data_beta)
-  anova(m.int,m) #Test the added value of the random slope
-  m.diff <- lmer(rt~condition*difflevel + (difflevel|sub),data=Data_beta,REML = F)
-  plot(resid(m),log(Data_beta$rt)) #Linearity
-  leveneTest(residuals(m) ~ Data_beta$condition) #Homogeneity of variance
-  qqmath(m) #Normality
-  anova(m) #Results
+  m.int <- lmer(rt~condition*difflevel + (1|sub),data=Data_beta,control=control) #Random intercept model
+  m.cond <- lmer(rt~condition*difflevel + (condition|sub),data=Data_beta,control=control)
+  anova(m.int,m.cond) #Test the added value of the random slope
+  m.diff <- lmer(rt~condition*difflevel + (difflevel|sub),data=Data_beta,REML = F,control=control)
+  plot(resid(m.cond),log(Data_beta$rt)) #Linearity
+  leveneTest(residuals(m.cond) ~ Data_beta$condition) #Homogeneity of variance
+  qqmath(m.cond) #Normality
+  anova(m.cond) #Results
   
   ### ACCURACY
-  m.int <- glmer(cor~condition*difflevel + (1|sub),data=Data_alpha,family=binomial)
-  m <- glmer(cor~condition*difflevel + (condition|sub),data=Data_alpha,family=binomial); 
+  m.int <- glmer(cor~condition*difflevel + (1|sub),data=Data_alpha,family=binomial,control=glmercontrol)
+  m.cond <- glmer(cor~condition*difflevel + (condition|sub),data=Data_alpha,family=binomial,control=glmercontrol); 
   anova(m.int,m)
-  m.diff <- glmer(cor~condition*difflevel + (difflevel|sub),data=Data_alpha,family=binomial); #singular
-  leveneTest(residuals(m) ~ Data_alpha$condition) #Homogeneity of variance
-  Anova(m)
+  m.diff <- glmer(cor~condition*difflevel + (difflevel|sub),data=Data_alpha,family=binomial,control=glmercontrol); #singular
+  leveneTest(residuals(m.cond) ~ Data_alpha$condition) #Homogeneity of variance
+  Anova(m.cond)
   
-  m <- glmer(cor~condition*difflevel + (condition|sub),data=Data_beta,family=binomial); Anova(m)
-  m.diff <- glmer(cor~condition*difflevel + (difflevel|sub),data=Data_beta,family=binomial); 
-  leveneTest(residuals(m) ~ Data_alpha$condition) #Homogeneity of variance
+  m.cond <- glmer(cor~condition*difflevel + (condition|sub),data=Data_beta,family=binomial,control=glmercontrol); 
+  m.diff <- glmer(cor~condition*difflevel + (difflevel|sub),data=Data_beta,family=binomial,control=glmercontrol); 
+  leveneTest(residuals(m.cond) ~ Data_alpha$condition) #Homogeneity of variance
+  Anova(m.cond)
   
   ### CONFIDENCE
-  m.int <- lmer(cj ~ condition*cor*difflevel + (1|sub),data = Data_alpha); 
-  mcond <- lmer(cj ~ condition*cor*difflevel + (condition|sub),data = Data_alpha); #No main effect when taking whole dataset
+  m.int <- lmer(cj ~ condition*cor*difflevel + (1|sub),data = Data_alpha,control=control); 
+  mcond <- lmer(cj ~ condition*cor*difflevel + (condition|sub),data = Data_alpha,control=control); #No main effect when taking whole dataset
   mboth <- lmer(cj ~ condition*cor*difflevel + (cor + condition|sub),data = Data_alpha, REML = F)
   anova(mcond,mboth)
   minteraction <- lmer(cj ~ condition*cor*difflevel + (cor * condition|sub),
-                       data = Data_alpha, REML = F,control=lmerControl(optimize="bobyqa"))
+                       data = Data_alpha, REML = F,control=control)
   anova(mboth,minteraction)
   minteractiondiff <- lmer(cj ~ condition*cor*difflevel + (cor * condition + difflevel|sub),
-                           data = Data_alpha, REML = F,control=lmerControl(optimize="bobyqa"))
+                           data = Data_alpha, REML = F,control=control)
   plot(resid(minteraction),Data_alpha$cj) #Linearity
   leveneTest(residuals(minteraction) ~ Data_alpha$condition) #Homogeneity of variance
   qqmath(minteraction) #Normality
   anova(minteraction) #Results
-  mcor <- lmer(cj ~ condition*difflevel + (condition|sub),data = subset(Data_alpha,cor==1)); 
-  merr <- lmer(cj ~ condition*difflevel + (condition|sub),data = subset(Data_alpha,cor==0)); 
+  mcor <- lmer(cj ~ condition*difflevel + (condition|sub),data = subset(Data_alpha,cor==1),control=control); 
+  merr <- lmer(cj ~ condition*difflevel + (condition|sub),data = subset(Data_alpha,cor==0),control=control); 
   anova(mcor) #Results
   anova(merr) #Results
   
-  m.int <- lmer(cj ~ condition*cor*difflevel + (1|sub),data = Data_beta); 
-  mcond <- lmer(cj ~ condition*cor*difflevel + (condition|sub),data = Data_beta,REML = F); 
+  m.int <- lmer(cj ~ condition*cor*difflevel + (1|sub),data = Data_beta,control=control); 
+  mcond <- lmer(cj ~ condition*cor*difflevel + (condition|sub),data = Data_beta,REML = F,control=control); 
   anova(m.int,mcond)
-  mcor <- lmer(cj ~ condition*cor*difflevel + (cor|sub),data = Data_beta,REML = F);
+  mcor <- lmer(cj ~ condition*cor*difflevel + (cor|sub),data = Data_beta,REML = F,control=control);
   anova(mcond,mcor) # m1 wins
-  mboth <- lmer(cj ~ condition*cor*difflevel + (cor+condition|sub),data = Data_beta,REML = F); 
+  mboth <- lmer(cj ~ condition*cor*difflevel + (cor+condition|sub),data = Data_beta,REML = F,control=control); 
   anova(mcond,mboth)
   minteraction <- lmer(cj ~ condition*cor*difflevel + (cor*condition|sub),
-                       data = Data_beta,REML = F,control=lmerControl(optimize="bobyqa")); 
+                       data = Data_beta,REML = F,control=control); 
   anova(mboth,minteraction)
   minteractiondiff <- lmer(cj ~ condition*cor*difflevel + (cor*condition+difflevel|sub),
-                       data = Data_beta,REML = F,control=lmerControl(optimize="bobyqa")); 
+                       data = Data_beta,REML = F,control=control); 
   plot(resid(minteractiondiff),Data_beta$cj) #Linearity
   leveneTest(residuals(minteractiondiff) ~ Data_beta$condition) #Homogeneity of variance
   qqmath(minteractiondiff) #Normality
   anova(minteractiondiff)
-  mcor <- lmer(cj ~ condition*difflevel + (condition|sub),data = subset(Data_beta,cor==1)); 
-  merr <- lmer(cj ~ condition*difflevel + (condition|sub),data = subset(Data_beta,cor==0)); 
+  mcor <- lmer(cj ~ condition*difflevel + (condition|sub),data = subset(Data_beta,cor==1),control=control); 
+  merr <- lmer(cj ~ condition*difflevel + (condition|sub),data = subset(Data_beta,cor==0),control=control); 
   anova(mcor) #Results
   anova(merr) #Results
   
-  # 3-way interaction
-  mint <- lmer(cj ~ condition*cor*manip + (1|sub:manip), data = Data, REML = F)
-  m <- lmer(cj ~ condition*cor*manip + (condition|sub:manip), data = Data, REML = F)
-  anova(mint,m)
-  mcor <- lmer(cj ~ condition*cor*manip + (cor|sub:manip), data = Data, REML = F)
-  anova(m,mcor)
-  mboth <- lmer(cj ~ condition*cor*manip*difflevel + (cor+condition|sub:manip), data = Data, REML = F)
-  anova(m,mboth)
-  minteraction <- lmer(cj ~ condition*cor*manip*difflevel + (cor*condition|sub:manip), data = Data, REML = F)
-  anova(mboth,minteraction)
-  mslopes <- lmer(cj ~ condition*cor*manip*difflevel + (cor+condition+difflevel|sub:manip),
-                  data = Data, REML = F, control=lmerControl(optimize="bobyqa")) # Singular fit
-  plot(resid(minteraction),Data$cj)
-  leveneTest(residuals(minteraction) ~ Data$condition) #Homogeneity of variance
-  qqmath(minteraction) #Normality
-  anova(minteraction)
-  
   ### FEEDBACK exp2A
   train_alpha$cor <- as.factor(train_alpha$cor)
-  m <- lmer(fb ~ condition*cor*difflevel + (1+condition|sub),data = train_alpha)
+  m <- lmer(fb ~ condition*cor*difflevel + (1+condition|sub),data = train_alpha,control=control)
   plot(resid(m),train_alpha$fb)
   leveneTest(residuals(m) ~ train_alpha$condition) #Homogeneity of variance
   qqmath(m) #Normality
   anova(m)
   
-  m.err <- lmer(fb ~ condition*difflevel + (condition|sub),data = subset(train_alpha,cor==0))
+  m.err <- lmer(fb ~ condition*difflevel + (condition|sub),data = subset(train_alpha,cor==0),control=control)
   anova(m.err)
-  m.cor <- lmer(fb ~ condition*difflevel + (1|sub),data = subset(train_alpha,cor==1))
+  m.cor <- lmer(fb ~ condition*difflevel + (1|sub),data = subset(train_alpha,cor==1),control=control)
   anova(m.cor)
   
   ### FEEDBACK exp2B
   train_beta$cor <- as.factor(train_beta$cor)
-  m <- lmer(fb ~ condition*difflevel*cor + (condition|sub),data = train_beta)
+  m <- lmer(fb ~ condition*difflevel*cor + (condition|sub),data = train_beta,control=control)
   plot(resid(m),train_beta$fb)
   leveneTest(residuals(m) ~ train_beta$condition) #Homogeneity of variance
   qqmath(m) #Normality
   anova(m)
   
-  m.err <- lmer(fb ~ condition*difflevel + (condition|sub),data = subset(train_beta,cor==0))
+  m.err <- lmer(fb ~ condition*difflevel + (condition|sub),data = subset(train_beta,cor==0),control=control)
   anova(m.err)
-  m.cor <- lmer(fb ~ condition*difflevel + (1|sub),data = subset(train_beta,cor==1))
+  m.cor <- lmer(fb ~ condition*difflevel + (1|sub),data = subset(train_beta,cor==1),control=control)
   anova(m.cor)
   
   train_alpha$cor <- as.numeric(train_alpha$cor)
@@ -397,9 +398,8 @@ if (stat_tests) {
 }
 
 # Load model fits --------------------------------------------------------
-go_to("results")
-if (file.exists("fitted_parameters_2step_fixed.csv")) {
-  param <- read.csv("fitted_parameters_2step_fixed.csv")
+if (file.exists("../results/fitted_parameters_2step_fixed.csv")) {
+  param <- read.csv("../results/fitted_parameters_2step_fixed.csv")
 }else{
   nsim_fit <- 20
   
@@ -448,12 +448,10 @@ if (file.exists("fitted_parameters_2step_fixed.csv")) {
   beta_ddm_per_cond <- matrix(NA,N,Ncond)
   resid_ddm_per_cond <- matrix(NA,N,Ncond)
   
-  go_to("fits")
-  go_to("exp2")
   for(i in 1:N){
     for(c in 1:Ncond){
       print(paste('Running participant',i,'from',N,"condition",c))
-      file_name <- paste0('alpha/results_sub_',
+      file_name <- paste0('../fits/exp2/alpha/results_sub_',
                           subs[i],'_',manip[i,'x'],'_AB.Rdata')
       if (file.exists(file_name)) {
         load(file_name)
@@ -472,7 +470,7 @@ if (file.exists("fitted_parameters_2step_fixed.csv")) {
         resid_afix[i,c] <- results_ab$optim$bestval
       }
       
-      file_name <- paste0('beta/results_sub_',
+      file_name <- paste0('../fits/exp2/beta/results_sub_',
                           subs[i],'_',manip[i,'x'],'_AB.Rdata')
       if (file.exists(file_name)) {
         load(file_name)
@@ -492,7 +490,7 @@ if (file.exists("fitted_parameters_2step_fixed.csv")) {
       }
       
       
-      file_name <- paste0('both/results_sub_',
+      file_name <- paste0('../fits/exp2/both/results_sub_',
                           subs[i],'_',manip[i,'x'],'_AB.Rdata')
       if (file.exists(file_name)) {
         load(file_name)
@@ -512,7 +510,7 @@ if (file.exists("fitted_parameters_2step_fixed.csv")) {
       }
       
       
-      file_name <- paste0('none/results_sub_',
+      file_name <- paste0('../fits/exp2/none/results_sub_',
                           subs[i],'_',manip[i,'x'],'_AB.Rdata')
       if (file.exists(file_name)) {
         load(file_name)
@@ -531,7 +529,7 @@ if (file.exists("fitted_parameters_2step_fixed.csv")) {
         resid_nofix[i,c] <- results_ab$optim$bestval
       }
       
-      file_name <- paste0('ddm_per_condition/results_sub_',subs[i],'_',
+      file_name <- paste0('../fits/exp2/ddm_per_condition/results_sub_',subs[i],'_',
                           cond_ordered[c],'_',manip[i,'x'],'_DDM.Rdata')
       if (file.exists(file_name)) {
         load(file_name)
@@ -624,8 +622,7 @@ if (file.exists("fitted_parameters_2step_fixed.csv")) {
   param <- rbind(param_alphafixed,param_betafixed,param_bothfixed,param_nofixed,
                  param_pcor,param_pcor_cond)
   
-  go_to("results")
-  write.csv(param,file="fitted_parameters_hm.csv")
+  write.csv(param,file="../results/fitted_parameters_hm.csv")
   
 }
 # Simulation from model ---------------------------------------------------
@@ -636,8 +633,8 @@ nsim <- 1
 # Simulation parameters
 dt <- .001; ev_bound <- .5; ev_window <- dt; upperRT <- 5; sigma <- .1
 timesteps <- upperRT/dt; ev_mapping <- seq(-ev_bound,ev_bound,by=ev_window)
+setwd("../results")
 dir.create("heatmaps",showWarnings = F)
-go_to("heatmaps")
 for(i in 1:N){
 
   print(paste('simulating',i,'from',N))
@@ -678,7 +675,7 @@ for(i in 1:N){
                          with(par_pcor_cond,aggregate(drift,list(difflevel),mean))$x) #Drift rate
       
       temp_pcor_cond <- chi_square_optim_DDM_fullconfRT(par_pcor_cond,temp_dat_cond,returnFit = 0)
-      file_name <- paste0("hm_",subs[i],"_",cond_ordered[c],".Rdata")
+      file_name <- paste0("heatmaps/hm_",subs[i],"_",cond_ordered[c],".Rdata")
       if (file.exists(file_name)) {
         load(file_name)
       } else {
@@ -701,7 +698,7 @@ for(i in 1:N){
       }
     }
     temp_pcor <- chi_square_optim_DDM_fullconfRT(par_pcor,temp_dat,returnFit = 0)
-    file_name <- paste0("hm_",subs[i],".Rdata")
+    file_name <- paste0("heatmaps/hm_",subs[i],".Rdata")
     if (file.exists(file_name)) {
       load(file_name)
     } else {
@@ -907,7 +904,7 @@ mean_bic[mean_bic$manip=="beta","delta"] <-
 #Generate model simulations
 nsim <- 1
 nrep <- 500
-setwd("..")
+dir.create("simuls",showWarnings = F)
 if (!file.exists("conf_contrast.Rdata")) {
   temp_mat <- matrix(nrow=nrep,ncol=8)
   rep <- 1
@@ -1031,7 +1028,7 @@ obs_means_b$minus_vs_rest <- rowMeans(obs_means_b[,c("plus","control")]) - obs_m
 diff_b_obs_allcond <- with(obs_means_b,aggregate(minus_vs_rest,list(cor=cor,sub=sub),mean))
 
 # Figure 5 ----------------------------------------------------------------
-go_to("plots")
+setwd("../plots")
 
 #' Function to get the right font size in points
 cex_size <- function(size,cex.layout) {

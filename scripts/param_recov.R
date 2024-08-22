@@ -1,17 +1,28 @@
+#' @title Parameter recovery analysis
+#' @author Pierre Le Denmat
+#' @description Parameter recovery of the LDC model in the context of the research article: 
+#' "A low-dimensional approximation of optimal confidence".
+#' @details The script is divided into several sections:
+#' - Setup generative parameters: These are randomly sampled from a similar range as the model fits.
+#' - Generate data: Generate simulated data from the generative parameters
+#' - Model fitting: Load the model fits performed on the cluster (or fit the model if not already done).
+#' - Recovery analysis: Look at the correlation between the generative and estimated parameters.
+#' + look at the correlation between alpha and beta for possible tradeoff
+
 curdir <- dirname(rstudioapi::getSourceEditorContext()$path)
 setwd(curdir)
 
 library(myPackage)
 library(reshape)
 library(timeSeries)
-go_to("functions")
+setwd("../functions")
 source("quantilefit_function_AB.R")
 library(gamlss.dist) # Ex-gaussian for generating confRT distribution
-
+setwd("../scripts")
 
 
 cexmain <- 2;cexax <- 1.5;cexlab <- 2
-
+plots <- F
 set.seed(22052023)
 
 
@@ -36,7 +47,7 @@ t2time[t2time$RTconf<0,"RTconf"] <- .1
 
 # Generate some data from typical DDM parameters ----
 
-go_to("results")
+setwd("../results")
 if (file.exists("data_recov_exp2_ldc.csv")) {
   simdat <- read.csv("data_recov_exp2_ldc.csv")
 }else{
@@ -61,12 +72,12 @@ if (file.exists("data_recov_exp2_ldc.csv")) {
   
   write.csv(simdat,file = "data_recov_exp2_ldc.csv", row.names = F)
 }
+simdat2 <- read.csv("hide/data_recov_exp2_ldc.csv")
 
 
 # Retrieve model fits -----------------------------------------------------
 
-go_to("fits")
-go_to("recov_exp2")
+setwd("../fits/recov_exp2")
 
 bound_fit <- rep(NA,nsub)
 v_fit <- rep(NA,nsub)
@@ -101,7 +112,7 @@ for(i in 1:nsub){
 
 
 # Check parameter recovery ------------------------------------------------
-# Drift rates (names don't match because difficulty was order by alphabetic names
+# Drift rates (names don't match because difficulty was ordered by alphabetic names
 # i.e. easy - hard - medium)
 cor.test(v1,v2_fit)
 plot(v1,v2_fit,main=paste("r =",round(cor(v1,v2_fit),3)),ylab="Estimated v1",xlab = "Generative v1")

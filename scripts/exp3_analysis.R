@@ -1,3 +1,11 @@
+#' @title Analysis of the data from experiment 3
+#' @author Pierre Le Denmat
+#' @description Analysis of the data from experiment 3 in the context of the research article: 
+#' "A low-dimensional approximation of optimal confidence".
+#' @details The script is divided into several sections:
+#' - Preprocessing: The data is loaded and preprocessed.
+#' - Behaviour analysis: The behavioural data is analyzed using (generalized) linear mixed models.
+
 # First, let's clear the workspace
 rm(list=ls())
 
@@ -12,12 +20,9 @@ library(lattice)
 library(car)
 library(emmeans)
 library(Rcpp)
-library(BayesFactor)
 library(ggplot2)
 
-load("exp3_analysis.Rdata")
 plot_all <- FALSE
-stat_tests <- FALSE
 # Functions ---------------------------------------------------------------
 
 max_count <- function(data){
@@ -164,6 +169,7 @@ rt.transfer <- lmer(rt ~ feedback*difflevel + (difflevel+feedback|sub), data=sub
 anova(rt.transfer)
 eta_squared(rt.transfer, alternative = "two")
 
+# Confidence
 cj.same <- lmer(data = subset(data, transfer=="Direct"), cj ~ feedback*difflevel*cor + (cor+difflevel+feedback|sub), control=control, REML = F)
 anova(cj.same)
 eta_squared(cj.same, alternative = "two")
@@ -174,31 +180,3 @@ anova(cj.transfer)
 eta_squared(cj.transfer, alternative = "two")
 post_hoc <- emmeans(cj.transfer, pairwise ~ feedback | cor)
 pairs(post_hoc)
-
-# Let's try by splitting according to accuracy
-cj.correct <- lmer(data = subset(data, cor==1), cj ~ feedback*difflevel*transfer + (transfer+difflevel+feedback|sub), control=control, REML = F)
-cj.correct.interaction <- lmer(data = subset(data, cor==1), cj ~ feedback*difflevel*transfer + (transfer+difflevel+feedback+feedback:transfer|sub), control=control, REML = F)
-anova(cj.correct,cj.correct.interaction)
-anova(cj.correct) 
-post_hoc <- emmeans(cj.correct, pairwise ~ feedback | transfer)
-pairs(post_hoc)
-eta_squared(anova(cj.correct),alternative="two")
-
-cj.incorrect <- lmer(data = subset(data, cor==0), cj ~ feedback*difflevel*transfer + (transfer+feedback|sub), control=control, REML = F)
-vif(cj.incorrect)
-anova(cj.incorrect)
-eta_squared(anova(cj.incorrect),alternative="two")
-
-# Bayes factor
-bf.cor <- generalTestBF(cj ~ feedback*transfer*difflevel + feedback:sub + transfer:sub + difflevel:sub + feedback:transfer:sub + sub, 
-                        data = subset(data,cor==1),whichRandom = "sub", neverExclude = "sub",whichModels = "top")
-bf.err <- generalTestBF(cj ~ feedback*transfer*difflevel + feedback:sub + transfer:sub + difflevel:sub + feedback:transfer:sub + sub, 
-                        data = subset(data,cor==0),whichRandom = "sub", neverExclude = "sub",whichModels = "top")
-bf.all <- generalTestBF(cj ~ feedback*transfer*difflevel*cor + feedback:sub + transfer:sub + difflevel:sub + feedback:transfer:sub + sub, 
-                        data = data,whichRandom = "sub", neverExclude = "sub",whichModels = "top")
-
-
-means <- with(data,aggregate(cj,list(feedback=feedback,transfer=transfer,cor=cor,sub=sub),mean))
-with(means,aggregate(x,by=list(feedback=feedback,transfer=transfer,cor=cor),mean))
-se <- with(means,aggregate(x, by = list(transfer = transfer, feedback = feedback, cor = cor), 
-                           FUN = function(x) sd(x)/sqrt(length(x))))
